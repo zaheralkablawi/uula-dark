@@ -25,6 +25,7 @@ res.addEventListener('click', e => {
 
 // ---------- Office helpers ----------
 const run = f => PowerPoint.run(f);
+const timeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 async function targetIds() {
   return run(async ctx => {
     const col = scope === 'sel' ? ctx.presentation.getSelectedSlides() : ctx.presentation.slides;
@@ -178,13 +179,14 @@ async function go(fn) {
 $('darkBtn').addEventListener('click', () => go(doDark));
 
 // ---------- the two steps the user does himself ----------
-let supported = false, step1 = false, is169 = null;
-const canConvert = () => supported && step1 && is169 === true;
+let supported = false, step1 = false, step2 = false, sizeAuto = null;
+const step2ok = () => step2 && sizeAuto !== false;
+const canConvert = () => supported && step1 && step2ok();
 function refreshLock() {
   $('darkBtn').disabled = busy || !canConvert();
   $('step1').classList.toggle('done', step1);
-  $('step2').classList.toggle('done', is169 === true);
-  const miss = [!step1 && '١', is169 !== true && '٢'].filter(Boolean);
+  $('step2').classList.toggle('done', step2ok());
+  const miss = [!step1 && '١', !step2ok() && '٢'].filter(Boolean);
   $('lockNote').hidden = !supported || !miss.length;
   $('lockNote').textContent = miss.length === 2 ? 'أكمل الخطوتين ١ و٢ أولًا.' : 'أكمل الخطوة ' + (miss[0] || '') + ' أولًا.';
 }
@@ -224,27 +226,28 @@ async function checkSize() {
 }
 async function checkSize0() {
   let w = 0, h = 0;
-  try {
-    if (Office.context.requirements.isSetSupported('PowerPointApi', '1.10')) {
-      await run(async ctx => { const p = ctx.presentation.pageSetup; p.load('slideWidth,slideHeight'); await ctx.sync(); w = p.slideWidth; h = p.slideHeight; });
-    }
-  } catch (e) { w = h = 0; }
+  if (Office.context.requirements.isSetSupported('PowerPointApi', '1.10')) {
+    try { await timeout(run(async ctx => { const p = ctx.presentation.pageSetup; p.load('slideWidth,slideHeight'); await ctx.sync(); w = p.slideWidth; h = p.slideHeight; }), 4000); } catch (e) { w = h = 0; }
+  }
   if (!w || !h) {
     try {
-      const ids = await allIds();
-      if (ids.length) { const pkg = await UD.openPackage(await exportSlide(ids[0])); w = pkg.slideW; h = pkg.slideH; }
-    } catch (e) {}
+      const ids = await timeout(allIds(), 4000);
+      if (ids.length) { const pkg = await timeout(exportSlide(ids[0]).then(UD.openPackage), 8000); w = pkg.slideW; h = pkg.slideH; }
+    } catch (e) { w = h = 0; }
   }
   const chip = $('sizeChip');
-  if (!w || !h) { is169 = null; chip.className = 'chip'; chip.textContent = 'تعذّر الفحص'; }
+  if (!w || !h) { sizeAuto = null; chip.className = 'chip'; chip.textContent = 'تعذّر الفحص التلقائي'; }
   else {
-    is169 = Math.abs(w / h - 16 / 9) < 0.01;
-    chip.className = 'chip ' + (is169 ? 'ok' : 'bad');
-    chip.textContent = is169 ? '✓ المقاس 16:9' : '✗ المقاس ليس 16:9';
+    sizeAuto = Math.abs(w / h - 16 / 9) < 0.01;
+    chip.className = 'chip ' + (sizeAuto ? 'ok' : 'bad');
+    chip.textContent = sizeAuto ? '✓ المقاس 16:9' : '✗ المقاس ليس 16:9';
+    if (sizeAuto && !$('s2Done').checked) setStep2(true);
   }
   refreshLock();
 }
-$('reSize').addEventListener('click', checkSize);
+$('reSize').addEventListener('click', () => { sizing = false; checkSize(); });
+function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings(); if (s) { s.set('udStep2', v); s.saveAsync(); } refreshLock(); }
+$('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
 let lastSize = 0, sizing = false;
 window.addEventListener('focus', () => { if (!busy && !sizing && Date.now() - lastSize > 15000) checkSize(); });
 
@@ -363,6 +366,7 @@ ready.then(info => {
   if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); $('sizeChip').textContent = '—'; return; }
   supported = true;
   const s = docSettings(); step1 = !!(s && s.get('udStep1')); $('s1Done').checked = step1;
+  step2 = !!(s && s.get('udStep2')); $('s2Done').checked = step2;
   refreshLock(); checkSize();
 });
 })();
