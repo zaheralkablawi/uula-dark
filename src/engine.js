@@ -238,7 +238,7 @@ function fillColorOf(c, ctx) {
 // classify every top-level item
 function analyze(doc, pkg, ctx) {
   const W = pkg.slideW, H = pkg.slideH;
-  return topItems(doc).map((el, i) => {
+  const items = topItems(doc).map((el, i) => {
     const c = core(el), g = geomOf(el, pkg), ph = phOf(el);
     const it = { i, el, g, tag: c ? c.localName : el.localName, kind: 'other', drop: null };
     if (!c) return it;
@@ -248,12 +248,12 @@ function analyze(doc, pkg, ctx) {
     else if (it.tag === 'graphicFrame') it.kind = desc(c, 'a', 'tbl').length ? 'table' : 'other';
     else if ((it.tag === 'sp' || it.tag === 'cxnSp') && isLineGeom(c)) it.kind = 'line';
     else if (it.tag === 'sp' && text) it.kind = 'text';
-    // separator: a long horizontal line of any color (or a thin red bar)
-    if (g.w >= W * 0.6 && g.h <= Math.max(H * 0.02, 6 * PT)) {
-      if (it.kind === 'line') { it.kind = 'sep'; it.drop = 'sep'; return it; }
-      const col = it.tag === 'sp' && !text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null;
-      if (col && isRed(rgb(col))) { it.kind = 'sep'; it.drop = 'sep'; return it; }
-    }
+    const nv = c.firstElementChild, cnv = nv && kid(nv, 'cNvPr', 'p');
+    it.name = cnv ? cnv.getAttribute('name') || '' : '';
+    it.hidden = !!cnv && /^(1|true)$/.test(cnv.getAttribute('hidden') || '');
+    it.text = text;
+    // separator added by the add-in's button
+    if (/^UULA فاصل/.test(it.name)) { it.kind = 'sep'; it.drop = 'sep'; return it; }
     if (['sldNum', 'ftr', 'dt'].includes(phType)) { it.drop = 'pagenum'; return it; }
     // page number: small box with digits only, low on the slide
     if (it.kind === 'text' && /^[0-9٠-٩]{1,4}$/.test(text) && g.w < W * 0.2 && g.y > H * 0.75) { it.drop = 'pagenum'; return it; }
@@ -270,6 +270,20 @@ function analyze(doc, pkg, ctx) {
     }
     return it;
   });
+  // separators drawn by hand: long horizontal lines (any color) or thin red bars,
+  // long compared with the page content (worksheets often sit in a narrow area of a wide slide)
+  const content = items.filter(t => !t.drop && !t.hidden && t.kind !== 'line' && t.g.w > 0);
+  let cw = W;
+  if (content.length) cw = Math.max(...content.map(t => t.g.x + t.g.w)) - Math.min(...content.map(t => t.g.x));
+  const need = Math.min(W, Math.max(cw, W * 0.3)) * 0.6;
+  for (const it of items) {
+    if (it.drop || it.hidden || !(it.g.w >= need && it.g.h <= Math.max(H * 0.02, 6 * PT))) continue;
+    const c = core(it.el);
+    if (it.kind === 'line') { it.kind = 'sep'; it.drop = 'sep'; continue; }
+    const col = it.tag === 'sp' && !it.text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null;
+    if (col && isRed(rgb(col))) { it.kind = 'sep'; it.drop = 'sep'; }
+  }
+  return items;
 }
 
 // ---------- split ----------
@@ -460,7 +474,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   const W = pkg.slideW, H = pkg.slideH;
   if (ctx.images !== false && !skip.has('images')) for (const t of keep) if (t.kind === 'pic' && Math.max(t.g.w, t.g.h) >= 80 * PT) { if (duotone(core(t.el), ctx)) report.duotone++; }
   // first layout guess in the XML (the add-in refines it with real heights)
-  const plan = layout(keep, pkg, ctx);
+  const plan = layout(keep.filter(t => !t.hidden), pkg, ctx);
   if (!skip.has('layout')) for (const s of plan.items) {
     const t = keep.find(k => k.i === s.i);
     if (t.kind === 'table') resizeTable(t.el, s.w);
@@ -503,7 +517,7 @@ function layout(keep, pkg, ctx) {
   let y0 = MARGIN;
   const first = rest[0];
   let title = null;
-  if (first && first.kind === 'text' && first.g.y <= pics[0].g.y) {
+  if (first && first.kind === 'text' && first.g.y <= pics[0].g.y && rest.some(t => t !== first && (t.kind === 'text' || t.kind === 'table'))) {
     title = first;
     const h = est(first, W);
     items.push({ i: first.i, kind: 'text', col: 'title', x: MARGIN, y: MARGIN, w: W, h });
