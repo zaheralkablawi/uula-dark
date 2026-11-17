@@ -61,6 +61,10 @@ async function refine(id, plan) {
     const L = plan.items.map(s => ({ s, sh: shapes.items[s.idx] }));
     if (L.some(x => !x.sh)) return plan.bottom / PT;
     const texts = L.filter(x => x.s.kind === 'text');
+    for (const x of L) if (x.s.kind !== 'text') {
+      x.sh.left = x.s.x / PT;
+      if (x.s.kind !== 'table') { x.sh.width = Math.max(1, x.s.w / PT); x.sh.height = Math.max(1, x.s.h / PT); }
+    }
     for (const x of texts) { x.sh.left = x.s.x / PT; x.sh.width = x.s.w / PT; x.sh.textFrame.autoSizeSetting = 'AutoSizeNone'; }
     await ctx.sync();
     for (const x of texts) { x.sh.textFrame.autoSizeSetting = 'AutoSizeShapeToFitText'; x.sh.textFrame.verticalAlignment = 'Top'; }
@@ -86,9 +90,12 @@ async function refine(id, plan) {
 
 // ---------- dark (splits at the separators first, then converts each part) ----------
 const LEVELS = ['3600', '3200', '3000'];
+// if PowerPoint refuses the converted slide, retry without parts of the conversion (also tells us which part)
+const SKIPS = [[], ['layout'], ['images'], ['tables'], ['shapes'], ['text'], ['layout', 'images', 'tables', 'shapes']];
+const SKIP_AR = { layout: 'الترتيب', images: 'تلوين الصور', tables: 'الجداول', shapes: 'الأشكال', text: 'النصوص' };
 async function doDark(ids) {
   const done = [], small = [], over = [], gray = [], skipped = [], errs = [];
-  let srcCount = 0;
+  let srcCount = 0; const fallbacks = [];
   const ctxBase = { bg: st.bg.slice(1).toUpperCase(), text: st.text.slice(1).toUpperCase(), accent: st.accent.slice(1).toUpperCase(), title: '4800', font: 'UULA Sans Medium', images: st.images };
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
@@ -106,16 +113,21 @@ async function doDark(ids) {
       for (const base of parts) {
         let newId = null, lvl = 0, bottom = 0, rep = null;
         for (lvl = 0; lvl < LEVELS.length; lvl++) {
-          stage = 'التحويل';
-          const d = UD.darkXml(base, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl] }));
-          rep = d.report;
           stage = 'إدراج الشريحة';
-          newId = await insertAfter(await UD.buildPackage(pkg, d.xml), prev);
+          let d = null, lastErr = null;
+          for (const sk of SKIPS) {
+            d = UD.darkXml(base, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl], skip: sk }));
+            try { newId = await insertAfter(await UD.buildPackage(pkg, d.xml), prev); lastErr = null; if (sk.length) fallbacks.push([sk, null]); d.skipped = sk; break; }
+            catch (e) { lastErr = e; }
+          }
+          if (lastErr) throw lastErr;
+          rep = d.report;
           stage = 'ترتيب المحتوى';
           bottom = await refine(newId, d.plan);
           if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
           await deleteSlide(newId);
         }
+        if (fallbacks.length && fallbacks[fallbacks.length - 1][1] === null) fallbacks[fallbacks.length - 1][1] = newId;
         await markDark(newId);
         prev = newId;
         done.push(newId);
@@ -144,6 +156,7 @@ async function doDark(ids) {
   if (over.length) line('err', '• ممتلئة، قسّمها يدويًا: ' + slideLinks(over, over.map(num)));
   if (gray.length) line('warn', '• صور فقدت ألوانها: ' + slideLinks(gray, gray.map(num)));
   if (skipped.length) line('warn', '• محوّلة سابقًا: ' + cnt(skipped.length));
+  fallbacks.forEach(([sk, i]) => { if (i) line('warn', '• شريحة <a data-id="' + i + '">' + num(i) + '</a> حُوّلت بدون: ' + sk.map(k => SKIP_AR[k]).join('، ')); });
   errs.forEach(m => line('err', '✗ ' + esc(m)));
   if (done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans Medium على الجهاز.</span>');
   say(done.length ? 'تم التحويل.' : 'لم يتم تحويل أي شريحة.');

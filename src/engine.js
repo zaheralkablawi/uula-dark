@@ -203,8 +203,9 @@ function setGeom(el, g) {
   }
   const off = kid(x, 'off', 'a'), ext = kid(x, 'ext', 'a');
   // groups: keep children in place by moving chOff together with off (sizes unchanged)
-  off.setAttribute('x', Math.round(g.x)); off.setAttribute('y', Math.round(g.y));
-  ext.setAttribute('cx', Math.round(g.w)); ext.setAttribute('cy', Math.round(g.h));
+  const n = (v, min) => { v = Math.round(+v); return isFinite(v) ? Math.max(min, v) : min; };
+  off.setAttribute('x', n(g.x, -2e7)); off.setAttribute('y', n(g.y, -2e7));
+  ext.setAttribute('cx', n(g.w, 0)); ext.setAttribute('cy', n(g.h, 0));
   // also move the Fallback copy of an AlternateContent so both agree
   if (el.localName === 'AlternateContent') {
     const fb = kid(el, 'Fallback', 'mc'), fs = fb && fb.firstElementChild;
@@ -442,6 +443,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   const items = analyze(doc, pkg, ctx);
   const report = { removed: 0, duotone: 0 };
   // remove separators, page numbers, QR codes, decorative cards
+  const skip = new Set(ctx.skip || []);
   for (const t of items) if (t.drop) { t.el.parentNode.removeChild(t.el); report.removed++; }
   const keep = items.filter(t => !t.drop);
   for (const tm of kids(doc.documentElement, 'timing', 'p')) doc.documentElement.removeChild(tm);
@@ -451,15 +453,15 @@ function darkXml(slideXml, pkg, ctxIn) {
   cSld.insertBefore(frag(doc, '<p:bg><p:bgPr><a:solidFill><a:srgbClr val="' + ctx.bg + '"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>'), kid(cSld, 'spTree', 'p'));
   // shapes, text, tables (skip the Fallback copies of equations)
   const tree = spTreeOf(doc);
-  for (const c of [...desc(tree, 'p', 'sp'), ...desc(tree, 'p', 'cxnSp')]) if (!inFallback(c)) styleShapeProps(c, ctx);
-  for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, false);
-  for (const tbl of desc(tree, 'a', 'tbl')) styleTable(tbl, ctx);
+  if (!skip.has('shapes')) for (const c of [...desc(tree, 'p', 'sp'), ...desc(tree, 'p', 'cxnSp')]) if (!inFallback(c)) styleShapeProps(c, ctx);
+  if (!skip.has('text')) for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, false);
+  if (!skip.has('tables')) for (const tbl of desc(tree, 'a', 'tbl')) styleTable(tbl, ctx);
   // big pictures: white lines on the dark background
   const W = pkg.slideW, H = pkg.slideH;
-  if (ctx.images !== false) for (const t of keep) if (t.kind === 'pic' && Math.max(t.g.w, t.g.h) >= 80 * PT) { if (duotone(core(t.el), ctx)) report.duotone++; }
+  if (ctx.images !== false && !skip.has('images')) for (const t of keep) if (t.kind === 'pic' && Math.max(t.g.w, t.g.h) >= 80 * PT) { if (duotone(core(t.el), ctx)) report.duotone++; }
   // first layout guess in the XML (the add-in refines it with real heights)
   const plan = layout(keep, pkg, ctx);
-  for (const s of plan.items) {
+  if (!skip.has('layout')) for (const s of plan.items) {
     const t = keep.find(k => k.i === s.i);
     if (t.kind === 'table') resizeTable(t.el, s.w);
     setGeom(t.el, { x: s.x, y: s.y, w: s.w, h: s.h });
@@ -510,7 +512,7 @@ function layout(keep, pkg, ctx) {
   // left column: pictures (Office x grows to the right, so "left" is x = MARGIN)
   let yl = y0;
   for (const t of pics) {
-    const k = Math.min(half / (t.g.w || 1), (H - MARGIN - yl) / (t.g.h || 1));
+    const k = Math.max(0.05, Math.min(half / (t.g.w || 1), Math.max(H * 0.25, H - MARGIN - yl) / (t.g.h || 1)));
     const w = t.g.w * k, h = t.g.h * k;
     items.push({ i: t.i, kind: 'pic', col: 'left', x: MARGIN, y: yl, w, h });
     yl += h + GAP;
