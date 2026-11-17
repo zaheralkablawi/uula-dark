@@ -906,7 +906,11 @@ $('addSep').addEventListener('click', async () => {
 });
 // step 2: read the slide size
 async function checkSize() {
-  if (!supported) return;
+  if (!supported || sizing) return;
+  sizing = true; lastSize = Date.now();
+  try { await checkSize0(); } finally { sizing = false; }
+}
+async function checkSize0() {
   let w = 0, h = 0;
   try {
     if (Office.context.requirements.isSetSupported('PowerPointApi', '1.10')) {
@@ -929,7 +933,8 @@ async function checkSize() {
   refreshLock();
 }
 $('reSize').addEventListener('click', checkSize);
-window.addEventListener('focus', () => { if (!busy) checkSize(); });
+let lastSize = 0, sizing = false;
+window.addEventListener('focus', () => { if (!busy && !sizing && Date.now() - lastSize > 15000) checkSize(); });
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
