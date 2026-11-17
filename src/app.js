@@ -7,7 +7,7 @@ const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
 const DEF = { bg: '#101217', text: '#ffffff', accent: '#ffff00', images: true };
 const st = Object.assign({}, DEF, load('ud-settings', {}));
-let scope = load('ud-scope', 'sel');
+let scope = load('ud-scope2', 'all');
 let busy = false;
 
 // ---------- status / results ----------
@@ -223,7 +223,7 @@ function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings
 $('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
 
 // ---------- scope ----------
-function setScope(v) { scope = v; save('ud-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
+function setScope(v) { scope = v; save('ud-scope2', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
 $('scope').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); });
 setScope(scope);
 
