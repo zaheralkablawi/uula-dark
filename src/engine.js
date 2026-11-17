@@ -291,6 +291,7 @@ function sectionXml(slideXml, pkg, ctx, ids) {
   const set = new Set(ids);
   let top = Infinity;
   for (const t of items) if (set.has(t.i)) top = Math.min(top, t.g.y);
+  for (const tm of kids(doc.documentElement, 'timing', 'p')) doc.documentElement.removeChild(tm);
   for (const t of items) {
     if (!set.has(t.i)) { t.el.parentNode.removeChild(t.el); continue; }
     if (isFinite(top) && top > MARGIN) setGeom(t.el, { ...t.g, y: t.g.y - top + MARGIN });
@@ -353,7 +354,7 @@ function styleTxBody(tx, ctx, inTable) {
     // math inside the paragraph (a14:m): colors + sizes, keep the math font
     for (const mr of desc(p, 'm', 'r')) {
       let rPr = kid(mr, 'rPr', 'a');
-      if (!rPr) { rPr = mk(doc, 'a', 'rPr'); mr.insertBefore(rPr, mr.firstChild); }
+      if (!rPr) { rPr = mk(doc, 'a', 'rPr'); const mp = kid(mr, 'rPr', 'm'); mr.insertBefore(rPr, mp ? mp.nextSibling : mr.firstChild); }
       styleRPr(rPr, ctx, { size: true, font: false });
     }
     for (const cp of desc(p, 'm', 'ctrlPr')) for (const rPr of kids(cp, 'rPr', 'a')) styleRPr(rPr, ctx, { size: true, font: false });
@@ -443,6 +444,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   // remove separators, page numbers, QR codes, decorative cards
   for (const t of items) if (t.drop) { t.el.parentNode.removeChild(t.el); report.removed++; }
   const keep = items.filter(t => !t.drop);
+  for (const tm of kids(doc.documentElement, 'timing', 'p')) doc.documentElement.removeChild(tm);
   // background
   const cSld = kid(doc.documentElement, 'cSld', 'p');
   const oldBg = kid(cSld, 'bg', 'p'); if (oldBg) cSld.removeChild(oldBg);

@@ -93,9 +93,11 @@ async function doDark(ids) {
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
     const id = ids[k];
+    let stage = 'قراءة الشريحة', origB64 = null;
     try {
       if (await isDarkDone(id)) { skipped.push(id); continue; }
-      const pkg = await UD.openPackage(await exportSlide(id));
+      origB64 = await exportSlide(id);
+      const pkg = await UD.openPackage(origB64);
       const slideHpt = pkg.slideH / PT;
       const ctx0 = { scheme: UD.readTheme(pkg.files) };
       const sec = UD.sections(UD.analyze(UD.parseXml(pkg.files.slide), pkg, ctx0));
@@ -104,9 +106,12 @@ async function doDark(ids) {
       for (const base of parts) {
         let newId = null, lvl = 0, bottom = 0, rep = null;
         for (lvl = 0; lvl < LEVELS.length; lvl++) {
+          stage = 'التحويل';
           const d = UD.darkXml(base, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl] }));
           rep = d.report;
+          stage = 'إدراج الشريحة';
           newId = await insertAfter(await UD.buildPackage(pkg, d.xml), prev);
+          stage = 'ترتيب المحتوى';
           bottom = await refine(newId, d.plan);
           if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
           await deleteSlide(newId);
@@ -118,9 +123,18 @@ async function doDark(ids) {
         if (bottom > slideHpt - UD.MARGIN / PT + 0.5) over.push(newId);
         if (rep && rep.duotone) gray.push(newId);
       }
+      stage = 'حذف الأصل';
       await deleteSlide(id);
       srcCount++;
-    } catch (e) { errs.push(e.message || String(e)); }
+    } catch (e) {
+      let extra = '';
+      if (stage === 'إدراج الشريحة' && origB64) {
+        // diagnosis: can the untouched slide be inserted? then the problem is in the converted XML
+        try { const t = await insertAfter(origB64, id); await deleteSlide(t); extra = ' — الأصل يُدرج بنجاح، المشكلة في الملف المحوَّل'; }
+        catch (e2) { extra = ' — حتى الأصل لا يُدرج: ' + errText(e2); }
+      }
+      errs.push(stage + ': ' + errText(e) + extra);
+    }
   }
   prog(null);
   const all = await allIds(), num = i => all.indexOf(i) + 1;
@@ -134,6 +148,7 @@ async function doDark(ids) {
   if (done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans Medium على الجهاز.</span>');
   say(done.length ? 'تم التحويل.' : 'لم يتم تحويل أي شريحة.');
 }
+const errText = e => { const loc = e && e.debugInfo && e.debugInfo.errorLocation; return (e && (e.code || e.message) || String(e)) + (loc ? ' (' + loc + ')' : ''); };
 const cnt = n => n === 1 ? 'شريحة واحدة' : n === 2 ? 'شريحتان' : n <= 10 ? n + ' شرائح' : n + ' شريحة';
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
