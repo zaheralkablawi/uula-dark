@@ -875,9 +875,11 @@ $('addSep').addEventListener('click', async () => {
       const slide = sel.items[0];
       let W = 960, H = 540;
       try { const pkg = await UD.openPackage(await exportSlide(slide.id)); W = pkg.slideW / PT; H = pkg.slideH / PT; } catch (e) {}
-      const ln = slide.shapes.addLine(PowerPoint.ConnectorType.straight, { left: 40, top: H / 2, width: W - 80, height: 0 });
+      // a thin red bar (not a connector line): it always stays horizontal, even when dragged
+      const ln = slide.shapes.addGeometricShape(PowerPoint.GeometricShapeType.rectangle, { left: 40, top: H / 2, width: W - 80, height: 3 });
       ln.name = 'UULA فاصل';
-      ln.lineFormat.color = '#FF0000'; ln.lineFormat.weight = 2.5;
+      ln.fill.setSolidColor('#FF0000');
+      ln.lineFormat.visible = false;
       ln.load('id'); await ctx.sync();
       try { slide.setSelectedShapes([ln.id]); await ctx.sync(); } catch (e) {}
       say('اسحب الفاصل إلى مكانه.');
