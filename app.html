@@ -122,7 +122,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <div class="sbody">
         <b>حوّل مقاس الشرائح إلى 16:9</b>
         <span class="note">من تبويب تصميم ← حجم الشريحة ← شاشة عريضة (16:9).</span>
-        <div class="srow"><label class="chk"><input type="checkbox" id="s2Done"> تم تحويل المقاس</label><span class="chip" id="sizeChip">جارٍ الفحص…</span><button type="button" class="mini" id="reSize">إعادة الفحص</button></div>
+        <div class="srow"><label class="chk"><input type="checkbox" id="s2Done"> تم تحويل المقاس</label></div>
       </div>
     </div>
   </section>
@@ -882,8 +882,8 @@ async function go(fn) {
 $('darkBtn').addEventListener('click', () => go(doDark));
 
 // ---------- the two steps the user does himself ----------
-let supported = false, step1 = false, step2 = false, sizeAuto = null;
-const step2ok = () => step2 && sizeAuto !== false;
+let supported = false, step1 = false, step2 = false;
+const step2ok = () => step2;
 const canConvert = () => supported && step1 && step2ok();
 function refreshLock() {
   $('darkBtn').disabled = busy || !canConvert();
@@ -921,38 +921,9 @@ $('addSep').addEventListener('click', async () => {
     });
   } catch (e) { say('تعذّرت إضافة الفاصل: ' + (e.message || e)); }
 });
-// step 2: read the slide size
-async function checkSize() {
-  if (!supported || sizing) return;
-  sizing = true; lastSize = Date.now();
-  try { await checkSize0(); } finally { sizing = false; }
-}
-async function checkSize0() {
-  let w = 0, h = 0;
-  if (Office.context.requirements.isSetSupported('PowerPointApi', '1.10')) {
-    try { await timeout(run(async ctx => { const p = ctx.presentation.pageSetup; p.load('slideWidth,slideHeight'); await ctx.sync(); w = p.slideWidth; h = p.slideHeight; }), 4000); } catch (e) { w = h = 0; }
-  }
-  if (!w || !h) {
-    try {
-      const ids = await timeout(allIds(), 4000);
-      if (ids.length) { const pkg = await timeout(exportSlide(ids[0]).then(UD.openPackage), 8000); w = pkg.slideW; h = pkg.slideH; }
-    } catch (e) { w = h = 0; }
-  }
-  const chip = $('sizeChip');
-  if (!w || !h) { sizeAuto = null; chip.className = 'chip'; chip.textContent = 'تعذّر الفحص التلقائي'; }
-  else {
-    sizeAuto = Math.abs(w / h - 16 / 9) < 0.01;
-    chip.className = 'chip ' + (sizeAuto ? 'ok' : 'bad');
-    chip.textContent = sizeAuto ? '✓ المقاس 16:9' : '✗ المقاس ليس 16:9';
-    if (sizeAuto && !$('s2Done').checked) setStep2(true);
-  }
-  refreshLock();
-}
-$('reSize').addEventListener('click', () => { sizing = false; checkSize(); });
+// step 2: the user changes the slide size himself and ticks the box
 function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings(); if (s) { s.set('udStep2', v); s.saveAsync(); } refreshLock(); }
 $('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
-let lastSize = 0, sizing = false;
-window.addEventListener('focus', () => { if (!busy && !sizing && Date.now() - lastSize > 15000) checkSize(); });
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
@@ -1065,12 +1036,12 @@ $('appVer').textContent = VER;
 refreshLock();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); $('sizeChip').textContent = '—'; return; }
-  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); $('sizeChip').textContent = '—'; return; }
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); return; }
+  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); return; }
   supported = true;
   const s = docSettings(); step1 = !!(s && s.get('udStep1')); $('s1Done').checked = step1;
   step2 = !!(s && s.get('udStep2')); $('s2Done').checked = step2;
-  refreshLock(); checkSize();
+  refreshLock();
 });
 })();
 </script>
