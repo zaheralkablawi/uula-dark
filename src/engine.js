@@ -246,6 +246,7 @@ function analyze(doc, pkg, ctx) {
     const text = textOf(c).trim();
     if (it.tag === 'pic') it.kind = 'pic';
     else if (it.tag === 'graphicFrame') it.kind = desc(c, 'a', 'tbl').length ? 'table' : 'other';
+    else if (it.tag === 'grpSp') it.kind = 'group';
     else if ((it.tag === 'sp' || it.tag === 'cxnSp') && isLineGeom(c)) it.kind = 'line';
     else if (it.tag === 'sp' && text) it.kind = 'text';
     const nv = c.firstElementChild, cnv = nv && kid(nv, 'cNvPr', 'p');
@@ -324,44 +325,48 @@ function ensure(parent, ns, ln, order, first) {
   if (!e) { e = mk(parent.ownerDocument, ns, ln); if (order) placeChild(parent, e, order); else if (first) parent.insertBefore(e, parent.firstChild); else parent.appendChild(e); }
   return e;
 }
-function styleTxBody(tx, ctx, inTable) {
+// mode: false (normal box), 'table' (table cell), 'group' (part of a drawing: colors only, sizes and layout kept)
+function styleTxBody(tx, ctx, mode) {
   const doc = tx.ownerDocument;
+  const inTable = mode === 'table', grp = mode === 'group', sz = !grp;
   const arabic = /[؀-ۿ]/.test(textOf(tx));
   const bp = kid(tx, 'bodyPr', 'a');
-  if (bp && !inTable) {
+  if (bp && !inTable && !grp) {
     bp.setAttribute('anchor', 't'); bp.setAttribute('wrap', 'square');
     removeKids(bp, ['noAutofit', 'normAutofit', 'spAutoFit']);
     placeChild(bp, mk(doc, 'a', 'spAutoFit'), BODYPR_ORDER);
   }
   const lst = kid(tx, 'lstStyle', 'a');
-  if (lst) for (const d of desc(lst, 'a', 'defRPr')) styleRPr(d, ctx, { size: true, font: true });
+  if (lst) for (const d of desc(lst, 'a', 'defRPr')) styleRPr(d, ctx, { size: sz, font: true });
   for (const p of kids(tx, 'p', 'a')) {
     let pPr = kid(p, 'pPr', 'a');
     if (!pPr) { pPr = mk(doc, 'a', 'pPr'); p.insertBefore(pPr, p.firstChild); }
     // Arabic box: right aligned; an English-only line inside it stays LTR so its punctuation is right
     const arP = /[؀-ۿ]/.test(textOf(p));
-    pPr.setAttribute('algn', arabic ? 'r' : 'l'); pPr.setAttribute('rtl', arabic && (arP || !textOf(p).trim()) ? '1' : '0');
-    removeKids(pPr, ['lnSpc', 'spcAft']);
-    placeChild(pPr, frag(doc, '<a:lnSpc><a:spcPct val="150000"/></a:lnSpc>'), PPR_ORDER);
-    placeChild(pPr, frag(doc, '<a:spcAft><a:spcPts val="0"/></a:spcAft>'), PPR_ORDER);
-    const d = kid(pPr, 'defRPr', 'a'); if (d) styleRPr(d, ctx, { size: true, font: true });
+    if (!grp) {
+      pPr.setAttribute('algn', arabic ? 'r' : 'l'); pPr.setAttribute('rtl', arabic && (arP || !textOf(p).trim()) ? '1' : '0');
+      removeKids(pPr, ['lnSpc', 'spcAft']);
+      placeChild(pPr, frag(doc, '<a:lnSpc><a:spcPct val="150000"/></a:lnSpc>'), PPR_ORDER);
+      placeChild(pPr, frag(doc, '<a:spcAft><a:spcPts val="0"/></a:spcAft>'), PPR_ORDER);
+    }
+    const d = kid(pPr, 'defRPr', 'a'); if (d) styleRPr(d, ctx, { size: sz, font: true });
     // runs, fields, line breaks
     for (const r of [...kids(p, 'r', 'a'), ...kids(p, 'fld', 'a'), ...kids(p, 'br', 'a')]) {
       let rPr = kid(r, 'rPr', 'a');
       if (!rPr) { rPr = mk(doc, 'a', 'rPr'); r.insertBefore(rPr, r.firstChild); }
-      styleRPr(rPr, ctx, { size: true, font: true });
+      styleRPr(rPr, ctx, { size: sz, font: true });
     }
     let e = kid(p, 'endParaRPr', 'a');
     if (!e) { e = mk(doc, 'a', 'endParaRPr'); p.appendChild(e); }
-    styleRPr(e, ctx, { size: true, font: true });
+    styleRPr(e, ctx, { size: sz, font: true });
     // math inside the paragraph (a14:m): colors + sizes, keep the math font
     for (const mr of desc(p, 'm', 'r')) {
       let rPr = kid(mr, 'rPr', 'a');
       if (!rPr) { rPr = mk(doc, 'a', 'rPr'); const mp = kid(mr, 'rPr', 'm'); mr.insertBefore(rPr, mp ? mp.nextSibling : mr.firstChild); }
-      styleRPr(rPr, ctx, { size: true, font: false });
+      styleRPr(rPr, ctx, { size: sz, font: false });
     }
-    for (const cp of desc(p, 'm', 'ctrlPr')) for (const rPr of kids(cp, 'rPr', 'a')) styleRPr(rPr, ctx, { size: true, font: false });
-    if (arabic) for (const op of desc(p, 'm', 'oMathPara')) {
+    for (const cp of desc(p, 'm', 'ctrlPr')) for (const rPr of kids(cp, 'rPr', 'a')) styleRPr(rPr, ctx, { size: sz, font: false });
+    if (arabic && !grp) for (const op of desc(p, 'm', 'oMathPara')) {
       let pp = kid(op, 'oMathParaPr', 'm');
       if (!pp) { pp = mk(doc, 'm', 'oMathParaPr'); op.insertBefore(pp, op.firstChild); }
       let jc = kid(pp, 'jc', 'm');
@@ -374,7 +379,12 @@ function styleTxBody(tx, ctx, inTable) {
 function styleShapeProps(c, ctx) {
   const spPr = kid(c, 'spPr', 'p'); if (!spPr) return;
   const doc = c.ownerDocument;
-  if (!isLineGeom(c) && c.localName === 'sp') { removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER); }
+  const grp = hasAncestor(c, e => e.localName === 'grpSp');
+  if (!isLineGeom(c) && c.localName === 'sp') {
+    const sf = kid(spPr, 'solidFill', 'a'), hex = sf && colorOf(sf, ctx);
+    if (grp && hex && !isLight(hex)) recolorFill(spPr, ctx, SPPR_ORDER);
+    else if (!grp || hex) { removeKids(spPr, FILLS); placeChild(spPr, mk(doc, 'a', 'noFill'), SPPR_ORDER); }
+  }
   const ln = kid(spPr, 'ln', 'a'); if (ln) recolorFill(ln, ctx, LN_ORDER);
   const st = kid(c, 'style', 'p');
   if (st) { recolorRef(kid(st, 'lnRef', 'a'), ctx); recolorRef(kid(st, 'fontRef', 'a'), ctx); if (c.localName === 'sp' && !isLineGeom(c)) { const fr = kid(st, 'fillRef', 'a'); if (fr) fr.setAttribute('idx', '0'); } }
@@ -430,6 +440,14 @@ function estimateTable(tbl, widthEmu, ctx) {
   }
   return h;
 }
+function scaleGroup(el, k) {
+  if (!(k > 0) || Math.abs(k - 1) < 0.01) return;
+  const c = core(el);
+  for (const r of [...desc(c, 'a', 'rPr'), ...desc(c, 'a', 'endParaRPr'), ...desc(c, 'a', 'defRPr')]) {
+    const v = +r.getAttribute('sz'); if (v) r.setAttribute('sz', Math.max(100, Math.min(400000, Math.round(v * k))));
+  }
+  for (const ln of desc(c, 'a', 'ln')) { const w = +ln.getAttribute('w'); if (w) ln.setAttribute('w', Math.round(w * k)); }
+}
 function resizeTable(el, newW) {
   const c = core(el), tbl = desc(c, 'a', 'tbl')[0];
   const cols = desc(tbl, 'a', 'gridCol');
@@ -456,7 +474,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   // shapes, text, tables (skip the Fallback copies of equations)
   const tree = spTreeOf(doc);
   if (!skip.has('shapes')) for (const c of [...desc(tree, 'p', 'sp'), ...desc(tree, 'p', 'cxnSp')]) if (!inFallback(c)) styleShapeProps(c, ctx);
-  if (!skip.has('text')) for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, false);
+  if (!skip.has('text')) for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, hasAncestor(tx, e => e.localName === 'grpSp') ? 'group' : false);
   if (!skip.has('tables')) for (const tbl of desc(tree, 'a', 'tbl')) styleTable(tbl, ctx);
   // big pictures: white lines on the dark background
   const W = pkg.slideW, H = pkg.slideH;
@@ -466,6 +484,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   if (!skip.has('layout')) for (const s of plan.items) {
     const t = keep.find(k => k.i === s.i);
     if (t.kind === 'table') resizeTable(t.el, s.w);
+    if (t.kind === 'group' && t.g.w) scaleGroup(t.el, s.w / t.g.w);
     setGeom(t.el, { x: s.x, y: s.y, w: s.w, h: s.h });
   }
   // plan indexes refer to the order of the remaining top items
@@ -477,7 +496,7 @@ function darkXml(slideXml, pkg, ctxIn) {
 function layout(keep, pkg, ctx) {
   const W = pkg.slideW - 2 * MARGIN, H = pkg.slideH;
   const sorted = [...keep].sort((a, b) => a.g.y - b.g.y || b.g.x - a.g.x);
-  const pics = sorted.filter(t => t.kind === 'pic' && Math.max(t.g.w, t.g.h) >= 80 * PT);
+  const pics = sorted.filter(t => (t.kind === 'pic' || t.kind === 'group') && Math.max(t.g.w, t.g.h) >= 80 * PT);
   const rest = sorted.filter(t => !pics.includes(t));
   const items = [];
   const est = (t, w) => {
@@ -493,7 +512,9 @@ function layout(keep, pkg, ctx) {
       let w, x, h;
       if (t.kind === 'text' || t.kind === 'table') { w = W; x = MARGIN; h = est(t, w); }
       else {
-        const k = Math.min(1, W / (t.g.w || 1), (H - 2 * MARGIN) / (t.g.h || 1));
+        // pictures and drawings grow up to 45% of the slide height (never wider than the slide)
+        const big = (t.kind === 'pic' || t.kind === 'group') && Math.max(t.g.w, t.g.h) >= 80 * PT;
+        const k = big ? Math.max(0.05, Math.min(W / (t.g.w || 1), H * 0.45 / (t.g.h || 1))) : Math.min(1, W / (t.g.w || 1), (H - 2 * MARGIN) / (t.g.h || 1));
         w = t.g.w * k; h = t.g.h * k; x = MARGIN + (W - w) / 2;
       }
       items.push({ i: t.i, kind: t.kind, col: 'full', x, y, w, h });
@@ -516,7 +537,7 @@ function layout(keep, pkg, ctx) {
   for (const t of pics) {
     const k = Math.max(0.05, Math.min(half / (t.g.w || 1), Math.max(H * 0.25, H - MARGIN - yl) / (t.g.h || 1)));
     const w = t.g.w * k, h = t.g.h * k;
-    items.push({ i: t.i, kind: 'pic', col: 'left', x: MARGIN, y: yl, w, h });
+    items.push({ i: t.i, kind: t.kind, col: 'left', x: MARGIN, y: yl, w, h });
     yl += h + GAP;
   }
   let yr = y0;
