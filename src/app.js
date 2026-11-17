@@ -84,40 +84,11 @@ async function refine(id, plan) {
   });
 }
 
-// ---------- split ----------
-async function doSplit(ids) {
-  const made = [], skipped = [], errs = [];
-  for (let k = 0; k < ids.length; k++) {
-    prog(k / ids.length); say('تقسيم الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
-    const id = ids[k];
-    try {
-      const pkg = await UD.openPackage(await exportSlide(id));
-      const ctx0 = { scheme: UD.readTheme(pkg.files) };
-      const items = UD.analyze(UD.parseXml(pkg.files.slide), pkg, ctx0);
-      const sec = UD.sections(items);
-      if (!sec.count || sec.parts.length < 2) { skipped.push(id); continue; }
-      let prev = id;
-      for (const part of sec.parts) {
-        const b64 = await UD.buildPackage(pkg, UD.sectionXml(pkg.files.slide, pkg, ctx0, part));
-        prev = await insertAfter(b64, prev);
-        made.push(prev);
-      }
-      await deleteSlide(id);
-    } catch (e) { errs.push(e.message || String(e)); }
-  }
-  prog(null);
-  const all = await allIds();
-  res.innerHTML = '';
-  if (made.length) line('ok', '✓ صار عدد الشرائح الجديدة ' + made.length + ': ' + slideLinks(made, made.map(i => all.indexOf(i) + 1)));
-  if (skipped.length) line('warn', '• بلا خطوط حمراء: ' + skipped.length + ' شريحة');
-  errs.forEach(m => line('err', '✗ ' + esc(m)));
-  say(made.length ? 'تم التقسيم.' : 'لم يتم تقسيم أي شريحة.');
-}
-
-// ---------- dark ----------
+// ---------- dark (splits at the separators first, then converts each part) ----------
 const LEVELS = ['3600', '3200', '3000'];
 async function doDark(ids) {
   const done = [], small = [], over = [], gray = [], skipped = [], errs = [];
+  let srcCount = 0;
   const ctxBase = { bg: st.bg.slice(1).toUpperCase(), text: st.text.slice(1).toUpperCase(), accent: st.accent.slice(1).toUpperCase(), title: '4800', font: 'UULA Sans Medium', images: st.images };
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
@@ -126,49 +97,120 @@ async function doDark(ids) {
       if (await isDarkDone(id)) { skipped.push(id); continue; }
       const pkg = await UD.openPackage(await exportSlide(id));
       const slideHpt = pkg.slideH / PT;
-      let newId = null, lvl = 0, bottom = 0, rep = null;
-      for (lvl = 0; lvl < LEVELS.length; lvl++) {
-        const d = UD.darkXml(pkg.files.slide, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl] }));
-        rep = d.report;
-        newId = await insertAfter(await UD.buildPackage(pkg, d.xml), id);
-        bottom = await refine(newId, d.plan);
-        if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
-        await deleteSlide(newId);
+      const ctx0 = { scheme: UD.readTheme(pkg.files) };
+      const sec = UD.sections(UD.analyze(UD.parseXml(pkg.files.slide), pkg, ctx0));
+      const parts = sec.count && sec.parts.length ? sec.parts.map(p => UD.sectionXml(pkg.files.slide, pkg, ctx0, p)) : [pkg.files.slide];
+      let prev = id;
+      for (const base of parts) {
+        let newId = null, lvl = 0, bottom = 0, rep = null;
+        for (lvl = 0; lvl < LEVELS.length; lvl++) {
+          const d = UD.darkXml(base, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl] }));
+          rep = d.report;
+          newId = await insertAfter(await UD.buildPackage(pkg, d.xml), prev);
+          bottom = await refine(newId, d.plan);
+          if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
+          await deleteSlide(newId);
+        }
+        await markDark(newId);
+        prev = newId;
+        done.push(newId);
+        if (lvl > 0) small.push([newId, LEVELS[lvl] / 100]);
+        if (bottom > slideHpt - UD.MARGIN / PT + 0.5) over.push(newId);
+        if (rep && rep.duotone) gray.push(newId);
       }
-      await markDark(newId);
       await deleteSlide(id);
-      done.push(newId);
-      if (lvl > 0) small.push([newId, LEVELS[lvl] / 100]);
-      if (bottom > slideHpt - UD.MARGIN / PT + 0.5) over.push(newId);
-      if (rep && rep.duotone) gray.push(newId);
+      srcCount++;
     } catch (e) { errs.push(e.message || String(e)); }
   }
   prog(null);
   const all = await allIds(), num = i => all.indexOf(i) + 1;
   res.innerHTML = '';
-  if (done.length) line('ok', '✓ تم تحويل ' + done.length + ' شريحة.');
+  if (done.length) line('ok', '✓ ' + cnt(srcCount) + ' ← ' + cnt(done.length) + ' داكنة: ' + slideLinks(done, done.map(num)));
   if (small.length) line('warn', '• صُغّر الخط: ' + small.map(([i, s]) => '<a data-id="' + i + '">' + num(i) + '</a> (' + s + ')').join('، '));
   if (over.length) line('err', '• ممتلئة، قسّمها يدويًا: ' + slideLinks(over, over.map(num)));
   if (gray.length) line('warn', '• صور فقدت ألوانها: ' + slideLinks(gray, gray.map(num)));
-  if (skipped.length) line('warn', '• محوّلة سابقًا: ' + skipped.length + ' شريحة');
+  if (skipped.length) line('warn', '• محوّلة سابقًا: ' + cnt(skipped.length));
   errs.forEach(m => line('err', '✗ ' + esc(m)));
   if (done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans Medium على الجهاز.</span>');
   say(done.length ? 'تم التحويل.' : 'لم يتم تحويل أي شريحة.');
 }
+const cnt = n => n === 1 ? 'شريحة واحدة' : n === 2 ? 'شريحتان' : n <= 10 ? n + ' شرائح' : n + ' شريحة';
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 async function go(fn) {
-  if (busy) return;
-  busy = true; $('splitBtn').disabled = $('darkBtn').disabled = true; res.innerHTML = '';
+  if (busy || !canConvert()) return;
+  busy = true; refreshLock(); res.innerHTML = '';
   try {
     const ids = await targetIds();
     if (!ids.length) { say('حدّد شريحة أولًا.', ''); return; }
     await fn(ids);
   } catch (e) { prog(null); say('حدث خطأ: ' + (e.message || e)); }
-  finally { busy = false; $('splitBtn').disabled = $('darkBtn').disabled = !supported; }
+  finally { busy = false; refreshLock(); }
 }
-$('splitBtn').addEventListener('click', () => go(doSplit));
 $('darkBtn').addEventListener('click', () => go(doDark));
+
+// ---------- the two steps the user does himself ----------
+let supported = false, step1 = false, is169 = null;
+const canConvert = () => supported && step1 && is169 === true;
+function refreshLock() {
+  $('darkBtn').disabled = busy || !canConvert();
+  $('step1').classList.toggle('done', step1);
+  $('step2').classList.toggle('done', is169 === true);
+  const miss = [!step1 && '١', is169 !== true && '٢'].filter(Boolean);
+  $('lockNote').hidden = !supported || !miss.length;
+  $('lockNote').textContent = miss.length === 2 ? 'أكمل الخطوتين ١ و٢ أولًا.' : 'أكمل الخطوة ' + (miss[0] || '') + ' أولًا.';
+}
+// step 1: remembered inside the presentation file
+function docSettings() { try { return Office.context.document.settings; } catch (e) { return null; } }
+$('s1Done').addEventListener('change', () => {
+  step1 = $('s1Done').checked; refreshLock();
+  const s = docSettings(); if (s) { s.set('udStep1', step1); s.saveAsync(); }
+});
+// "أضف فواصل": a red full-width line in the middle of the current slide, selected so it can be dragged into place
+$('addSep').addEventListener('click', async () => {
+  if (!supported) return;
+  try {
+    await run(async ctx => {
+      const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id'); await ctx.sync();
+      if (!sel.items.length) { say('حدّد شريحة أولًا.'); return; }
+      const slide = sel.items[0];
+      let W = 960, H = 540;
+      try { const pkg = await UD.openPackage(await exportSlide(slide.id)); W = pkg.slideW / PT; H = pkg.slideH / PT; } catch (e) {}
+      const ln = slide.shapes.addLine(PowerPoint.ConnectorType.straight, { left: 40, top: H / 2, width: W - 80, height: 0 });
+      ln.name = 'UULA فاصل';
+      ln.lineFormat.color = '#FF0000'; ln.lineFormat.weight = 2.5;
+      ln.load('id'); await ctx.sync();
+      try { slide.setSelectedShapes([ln.id]); await ctx.sync(); } catch (e) {}
+      say('اسحب الفاصل إلى مكانه.');
+    });
+  } catch (e) { say('تعذّرت إضافة الفاصل: ' + (e.message || e)); }
+});
+// step 2: read the slide size
+async function checkSize() {
+  if (!supported) return;
+  let w = 0, h = 0;
+  try {
+    if (Office.context.requirements.isSetSupported('PowerPointApi', '1.10')) {
+      await run(async ctx => { const p = ctx.presentation.pageSetup; p.load('slideWidth,slideHeight'); await ctx.sync(); w = p.slideWidth; h = p.slideHeight; });
+    }
+  } catch (e) { w = h = 0; }
+  if (!w || !h) {
+    try {
+      const ids = await allIds();
+      if (ids.length) { const pkg = await UD.openPackage(await exportSlide(ids[0])); w = pkg.slideW; h = pkg.slideH; }
+    } catch (e) {}
+  }
+  const chip = $('sizeChip');
+  if (!w || !h) { is169 = null; chip.className = 'chip'; chip.textContent = 'تعذّر الفحص'; }
+  else {
+    is169 = Math.abs(w / h - 16 / 9) < 0.01;
+    chip.className = 'chip ' + (is169 ? 'ok' : 'bad');
+    chip.textContent = is169 ? '✓ المقاس 16:9' : '✗ المقاس ليس 16:9';
+  }
+  refreshLock();
+}
+$('reSize').addEventListener('click', checkSize);
+window.addEventListener('focus', () => { if (!busy) checkSize(); });
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
@@ -251,7 +293,7 @@ $('modalX').addEventListener('click', () => { $('modal').hidden = true; });
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
-  modal('حول الأداة', '<p>تقسّم أوراق العمل عند الخطوط الحمراء إلى شريحة لكل قسم، وتحوّلها إلى الوضع الداكن للعرض على الطلاب.</p>'
+  modal('حول الأداة', '<p>تحوّل أوراق العمل إلى شرائح داكنة للعرض على الطلاب: شريحة لكل جزء بين فاصلين.</p><p>قبل التحويل: أضف الفواصل بنفسك، وحوّل مقاس الشرائح إلى 16:9.</p>'
     + '<ul><li>خلفية داكنة ونص أبيض، والأزرق يصير أصفر</li><li>خط UULA Sans Medium بحجم 36 والعناوين 48</li><li>حذف رقم الصفحة ورمز QR والبطاقات الفاتحة</li><li>تصغير الخط تلقائيًا عند الامتلاء</li></ul>'
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
@@ -277,13 +319,14 @@ $('aboutBtn').addEventListener('click', () => {
 })();
 
 // ---------- start ----------
-let supported = false;
 $('appVer').textContent = VER;
-$('splitBtn').disabled = $('darkBtn').disabled = true;
+refreshLock();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); return; }
-  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); return; }
-  supported = true; $('splitBtn').disabled = $('darkBtn').disabled = false;
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); $('sizeChip').textContent = '—'; return; }
+  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); $('sizeChip').textContent = '—'; return; }
+  supported = true;
+  const s = docSettings(); step1 = !!(s && s.get('udStep1')); $('s1Done').checked = step1;
+  refreshLock(); checkSize();
 });
 })();

@@ -72,6 +72,24 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
 .mbox .foot{text-align:center;color:var(--muted);font-size:.8rem;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
+.step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
+.step+.step{border-top:1px solid var(--line);padding-top:9px}
+.circ{display:inline-grid;place-items:center;flex:none;width:1.65em;height:1.65em;border:1.5px solid var(--accent);border-radius:999px;color:var(--accent);font-size:.85rem;line-height:1;margin-top:2px}
+.step.done .circ{background:var(--accent);color:#fff}
+.sbody{display:grid;gap:3px;min-width:0}.sbody b{font-weight:600;font-size:.9rem}
+.srow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:3px}
+.srow .mini{display:inline-flex;align-items:center;gap:5px;height:26px}
+.chip{font-size:.76rem;border-radius:999px;padding:1px 9px;border:1px solid var(--line);color:var(--muted)}
+.chip.ok{border-color:#9fd6b5;background:#e9f7ef;color:var(--ok)}.chip.bad{border-color:#f3c09c;background:#fdf1e8;color:var(--warn)}
+.darkcard{background:#101217;color:#e9edf3;border-radius:12px;padding:12px;display:grid;gap:9px;box-shadow:0 6px 18px rgb(16 18 23 / .25)}
+.dhead{display:flex;align-items:center;gap:7px;font-size:.95rem}.dhead b{font-weight:600}
+.dseg{border-color:#2b303b}.dseg button{background:#171a21;color:#9aa3b2}.dseg button+button{border-color:#2b303b}
+.dseg button[aria-pressed="true"]{background:#262a33;color:#ffe600}
+.dbtn{font:inherit;font-size:1rem;font-weight:700;height:44px;border:0;border-radius:10px;background:#ffe600;color:#101217;cursor:pointer}
+.dbtn:hover{filter:brightness(1.05)}.dbtn:disabled{background:#2b303b;color:#6d7584;cursor:not-allowed;filter:none}
+.dlock{font-size:.76rem;color:#9aa3b2;text-align:center}
+.darkcard .status{color:#aab2c0}.darkcard .prog{background:#2b303b}.darkcard .prog i{background:#ffe600}
+.darkcard .res a{color:#ffe600}.darkcard .res .ok{color:#6fd39a}.darkcard .res .warn{color:#f4b37a}.darkcard .res .err{color:#ff8a80}.darkcard .note{color:#9aa3b2}
 </style></head><body>
 <div class="wrap">
   <header>
@@ -87,13 +105,36 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </header>
 
   <section class="panel">
-    <span class="label">التطبيق على</span>
-    <div class="seg" id="scope">
+    <span class="label">قبل التحويل: خطوتان تقوم بهما أنت</span>
+    <div class="step" id="step1">
+      <span class="circ">١</span>
+      <div class="sbody">
+        <b>أضف فواصل</b>
+        <span class="note">خط أفقي (أحمر أو أي لون) بين كل جزأين تريد فصلهما في شرائح مستقلة.</span>
+        <div class="srow">
+          <button type="button" class="mini" id="addSep"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h12"/></svg> أضف فواصل</button>
+          <label class="chk"><input type="checkbox" id="s1Done"> تمت إضافة الفواصل</label>
+        </div>
+      </div>
+    </div>
+    <div class="step" id="step2">
+      <span class="circ">٢</span>
+      <div class="sbody">
+        <b>حوّل مقاس الشرائح إلى 16:9</b>
+        <span class="note">من تبويب تصميم ← حجم الشريحة ← شاشة عريضة (16:9).</span>
+        <div class="srow"><span class="chip" id="sizeChip">جارٍ الفحص…</span><button type="button" class="mini" id="reSize">إعادة الفحص</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="darkcard">
+    <div class="dhead"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffe600" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><b>التحويل إلى الوضع الداكن</b></div>
+    <div class="seg dseg" id="scope">
       <button type="button" data-v="sel" aria-pressed="true">الشرائح المحددة</button>
       <button type="button" data-v="all" aria-pressed="false">كل الشرائح</button>
     </div>
-    <button type="button" class="act" id="splitBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg><span>تقسيم عند الخطوط الحمراء<small>شريحة لكل قسم</small></span></button>
-    <button type="button" class="act dark" id="darkBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>تحويل للوضع الداكن<small>ألوان وخط وأحجام وترتيب</small></span></button>
+    <button type="button" class="dbtn" id="darkBtn">تحويل</button>
+    <div class="dlock" id="lockNote">أكمل الخطوتين ١ و٢ أولًا.</div>
     <div class="prog" id="prog" hidden><i></i></div>
     <div class="status" id="status" role="status"></div>
     <div class="res" id="res"></div>

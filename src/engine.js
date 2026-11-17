@@ -247,9 +247,10 @@ function analyze(doc, pkg, ctx) {
     else if (it.tag === 'graphicFrame') it.kind = desc(c, 'a', 'tbl').length ? 'table' : 'other';
     else if ((it.tag === 'sp' || it.tag === 'cxnSp') && isLineGeom(c)) it.kind = 'line';
     else if (it.tag === 'sp' && text) it.kind = 'text';
-    // red separator line (or a thin red bar)
+    // separator: a long horizontal line of any color (or a thin red bar)
     if (g.w >= W * 0.6 && g.h <= Math.max(H * 0.02, 6 * PT)) {
-      const col = it.kind === 'line' ? lineColorOf(c, ctx) : (it.tag === 'sp' && !text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null);
+      if (it.kind === 'line') { it.kind = 'sep'; it.drop = 'sep'; return it; }
+      const col = it.tag === 'sp' && !text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null;
       if (col && isRed(rgb(col))) { it.kind = 'sep'; it.drop = 'sep'; return it; }
     }
     if (['sldNum', 'ftr', 'dt'].includes(phType)) { it.drop = 'pagenum'; return it; }
