@@ -110,7 +110,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       <span class="circ">١</span>
       <div class="sbody">
         <b>أضف فواصل</b>
-        <span class="note">خط أفقي (أحمر أو أي لون) بين كل جزأين تريد فصلهما في شرائح مستقلة.</span>
+        <span class="note">اضغط الزر ثم اسحب الفاصل بين كل جزأين تريد فصلهما. لا تُعتمد إلا الفواصل المضافة من هنا.</span>
         <div class="srow">
           <button type="button" class="mini" id="addSep"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h12"/></svg> أضف فواصل</button>
           <label class="chk"><input type="checkbox" id="s1Done"> تمت إضافة الفواصل</label>
@@ -439,19 +439,7 @@ function analyze(doc, pkg, ctx) {
     }
     return it;
   });
-  // separators drawn by hand: long horizontal lines (any color) or thin red bars,
-  // long compared with the page content (worksheets often sit in a narrow area of a wide slide)
-  const content = items.filter(t => !t.drop && !t.hidden && t.kind !== 'line' && t.g.w > 0);
-  let cw = W;
-  if (content.length) cw = Math.max(...content.map(t => t.g.x + t.g.w)) - Math.min(...content.map(t => t.g.x));
-  const need = Math.min(W, Math.max(cw, W * 0.3)) * 0.6;
-  for (const it of items) {
-    if (it.drop || it.hidden || !(it.g.w >= need && it.g.h <= Math.max(H * 0.02, 6 * PT))) continue;
-    const c = core(it.el);
-    if (it.kind === 'line') { it.kind = 'sep'; it.drop = 'sep'; continue; }
-    const col = it.tag === 'sp' && !it.text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null;
-    if (col && isRed(rgb(col))) { it.kind = 'sep'; it.drop = 'sep'; }
-  }
+  // only separators added with the add-in's button count; other lines stay as they are
   return items;
 }
 

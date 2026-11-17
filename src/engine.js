@@ -270,19 +270,7 @@ function analyze(doc, pkg, ctx) {
     }
     return it;
   });
-  // separators drawn by hand: long horizontal lines (any color) or thin red bars,
-  // long compared with the page content (worksheets often sit in a narrow area of a wide slide)
-  const content = items.filter(t => !t.drop && !t.hidden && t.kind !== 'line' && t.g.w > 0);
-  let cw = W;
-  if (content.length) cw = Math.max(...content.map(t => t.g.x + t.g.w)) - Math.min(...content.map(t => t.g.x));
-  const need = Math.min(W, Math.max(cw, W * 0.3)) * 0.6;
-  for (const it of items) {
-    if (it.drop || it.hidden || !(it.g.w >= need && it.g.h <= Math.max(H * 0.02, 6 * PT))) continue;
-    const c = core(it.el);
-    if (it.kind === 'line') { it.kind = 'sep'; it.drop = 'sep'; continue; }
-    const col = it.tag === 'sp' && !it.text ? (fillColorOf(c, ctx) || lineColorOf(c, ctx)) : null;
-    if (col && isRed(rgb(col))) { it.kind = 'sep'; it.drop = 'sep'; }
-  }
+  // only separators added with the add-in's button count; other lines stay as they are
   return items;
 }
 
