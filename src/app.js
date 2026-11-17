@@ -177,7 +177,8 @@ $('addSep').addEventListener('click', async () => {
       let W = 960, H = 540;
       try { const pkg = await UD.openPackage(await exportSlide(slide.id)); W = pkg.slideW / PT; H = pkg.slideH / PT; } catch (e) {}
       // a thin red bar (not a connector line): it always stays horizontal, even when dragged
-      const ln = slide.shapes.addGeometricShape(PowerPoint.GeometricShapeType.rectangle, { left: 40, top: H / 2, width: W - 80, height: 3 });
+      const bw = (W - 80) * 1.2; // 20% longer than the slide width minus the side margins, centered
+      const ln = slide.shapes.addGeometricShape(PowerPoint.GeometricShapeType.rectangle, { left: (W - bw) / 2, top: H / 2, width: bw, height: 3 });
       ln.name = 'UULA فاصل';
       ln.fill.setSolidColor('#FF0000');
       ln.lineFormat.visible = false;
