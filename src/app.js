@@ -242,12 +242,38 @@ function paintTitle() {
 $('tType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tType = b.dataset.v; save('ud-ttype', tType); paintTitle(); });
 paintTitle();
 const b64of = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
-function fillPlaceholder(doc, idx, text) {
-  const sp = [...doc.getElementsByTagNameNS(UD.NS.p, 'sp')].find(e => { const ph = e.getElementsByTagNameNS(UD.NS.p, 'ph')[0]; return ph && ph.getAttribute('idx') === String(idx); });
-  if (!sp || !text) return;
-  const tx = sp.getElementsByTagNameNS(UD.NS.p, 'txBody')[0];
-  for (const p of [...tx.getElementsByTagNameNS(UD.NS.a, 'p')]) tx.removeChild(p);
-  const P = UD.NS.a, p = doc.createElementNS(P, 'a:p'), r = doc.createElementNS(P, 'a:r'), rp = doc.createElementNS(P, 'a:rPr'), t = doc.createElementNS(P, 'a:t');
+// writes the text into the placeholder and copies the layout's position and text style onto it,
+// so the slide keeps its look even if PowerPoint does not link it back to the template's layout
+function fillPlaceholder(doc, idx, text, layout, scheme) {
+  const P = UD.NS.p, A = UD.NS.a;
+  const find = d => [...d.getElementsByTagNameNS(P, 'sp')].find(e => { const ph = e.getElementsByTagNameNS(P, 'ph')[0]; return ph && ph.getAttribute('idx') === String(idx); });
+  const sp = find(doc); if (!sp) return;
+  const lsp = layout && find(layout);
+  const tx = sp.getElementsByTagNameNS(P, 'txBody')[0];
+  if (lsp) {
+    const lspPr = lsp.getElementsByTagNameNS(P, 'spPr')[0], spPr = sp.getElementsByTagNameNS(P, 'spPr')[0];
+    const lx = lspPr && lspPr.getElementsByTagNameNS(A, 'xfrm')[0];
+    if (lx && spPr && !spPr.getElementsByTagNameNS(A, 'xfrm')[0]) spPr.insertBefore(doc.importNode(lx, true), spPr.firstChild);
+    const ltx = lsp.getElementsByTagNameNS(P, 'txBody')[0];
+    for (const name of ['bodyPr', 'lstStyle']) {
+      const src = ltx && [...ltx.children].find(c => c.localName === name), dst = [...tx.children].find(c => c.localName === name);
+      if (src && dst) {
+        const c = doc.importNode(src, true);
+        // theme colors (like bg1) become fixed colors, so they look the same in any presentation
+        for (const sc of [...c.getElementsByTagNameNS(A, 'schemeClr')]) {
+          const hex = scheme && scheme[sc.getAttribute('val')];
+          if (!hex) continue;
+          const rgbEl = doc.createElementNS(A, 'a:srgbClr'); rgbEl.setAttribute('val', hex);
+          for (const k of [...sc.children]) rgbEl.appendChild(k);
+          sc.parentNode.replaceChild(rgbEl, sc);
+        }
+        tx.replaceChild(c, dst);
+      }
+    }
+  }
+  if (!text) return;
+  for (const p of [...tx.getElementsByTagNameNS(A, 'p')]) tx.removeChild(p);
+  const p = doc.createElementNS(A, 'a:p'), r = doc.createElementNS(A, 'a:r'), rp = doc.createElementNS(A, 'a:rPr'), t = doc.createElementNS(A, 'a:t');
   rp.setAttribute('lang', 'ar-SA'); t.textContent = text; r.appendChild(rp); r.appendChild(t); p.appendChild(r); tx.appendChild(p);
 }
 const tSay = m => { $('tStatus').textContent = m || ''; };
@@ -281,8 +307,9 @@ $('tInsert').addEventListener('click', async () => {
     if (!r.ok) throw new Error(T('tplFail'));
     const pkg = await UD.openPackage(b64of(await r.arrayBuffer()));
     const doc = UD.parseXml(pkg.files.slide);
-    fillPlaceholder(doc, 10, $('tTitle').value.trim());
-    fillPlaceholder(doc, 11, $('tSub').value.trim());
+    const scheme = UD.readTheme(pkg.files);
+    fillPlaceholder(doc, 10, $('tTitle').value.trim(), pkg.layouts[0], scheme);
+    fillPlaceholder(doc, 11, $('tSub').value.trim(), pkg.layouts[0], scheme);
     const b64 = await UD.buildPackage(pkg, UD.serialize(doc));
     await run(async ctx => {
       const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id');
