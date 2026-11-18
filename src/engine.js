@@ -121,6 +121,7 @@ async function openPackage(b64) {
   if (pres) {
     const sz = desc(parseXml(await readText(pres)), 'p', 'sldSz')[0];
     if (sz) { slideW = +sz.getAttribute('cx'); slideH = +sz.getAttribute('cy'); }
+    var presDoc = sz && sz.ownerDocument;
   }
   const th = names.find(n => /^ppt\/theme\/theme\d+\.xml$/.test(n));
   if (th) files.theme = await readText(zip.file(th));
@@ -138,7 +139,9 @@ async function openPackage(b64) {
       if (mr) layouts.push(await readText(zip.file('ppt/slideMasters/' + mr.getAttribute('Target').split('/').pop())));
     }
   } catch (e) { /* no layout info */ }
-  return { zip, slidePath, files, slideW, slideH, layouts: layouts.map(parseXml) };
+  let baseSz = 1800;
+  try { const d = presDoc && desc(desc(presDoc, 'p', 'defaultTextStyle')[0], 'a', 'defRPr')[0]; if (d && d.getAttribute('sz')) baseSz = +d.getAttribute('sz'); } catch (e) {}
+  return { zip, slidePath, files, slideW, slideH, baseSz, layouts: layouts.map(parseXml) };
 }
 async function buildPackage(pkg, slideXml) {
   // write bytes, not a string: JSZip splits long strings into chunks and can cut a math letter (like 𝑖) in half
@@ -212,7 +215,7 @@ function setGeom(el, g) {
   if (el.localName === 'AlternateContent') {
     const fb = kid(el, 'Fallback', 'mc'), fs = fb && fb.firstElementChild;
     const fx = fs && kid(kid(fs, 'spPr', 'p'), 'xfrm', 'a');
-    if (fx) { kid(fx, 'off', 'a').setAttribute('x', Math.round(g.x)); kid(fx, 'off', 'a').setAttribute('y', Math.round(g.y)); }
+    if (fx) { kid(fx, 'off', 'a').setAttribute('x', Math.round(g.x)); kid(fx, 'off', 'a').setAttribute('y', Math.round(g.y)); const fe = kid(fx, 'ext', 'a'); if (fe && g.w > 0) { fe.setAttribute('cx', Math.round(g.w)); fe.setAttribute('cy', Math.round(g.h)); } }
   }
 }
 const textOf = el => desc(el, 'a', 't').map(t => t.textContent).join('') + desc(el, 'm', 't').map(t => t.textContent).join('');
@@ -381,7 +384,8 @@ function styleTxBody(tx, ctx, mode) {
 function styleShapeProps(c, ctx) {
   const spPr = kid(c, 'spPr', 'p'); if (!spPr) return;
   const doc = c.ownerDocument;
-  const grp = hasAncestor(c, e => e.localName === 'grpSp');
+  // drawings (shapes inside a group, or text-less shapes when zooming): light fills vanish, dark ones turn light
+  const grp = hasAncestor(c, e => e.localName === 'grpSp') || (ctx.layoutMode !== 'stack' && !hasText(c));
   if (!isLineGeom(c) && c.localName === 'sp') {
     const sf = kid(spPr, 'solidFill', 'a'), hex = sf && colorOf(sf, ctx);
     if (grp && hex && !isLight(hex)) recolorFill(spPr, ctx, SPPR_ORDER);
@@ -391,10 +395,10 @@ function styleShapeProps(c, ctx) {
   const st = kid(c, 'style', 'p');
   if (st) { recolorRef(kid(st, 'lnRef', 'a'), ctx); recolorRef(kid(st, 'fontRef', 'a'), ctx); if (c.localName === 'sp' && !isLineGeom(c)) { const fr = kid(st, 'fillRef', 'a'); if (fr) fr.setAttribute('idx', '0'); } }
 }
-function styleTable(tbl, ctx) {
+function styleTable(tbl, ctx, txMode) {
   const doc = tbl.ownerDocument;
   for (const tc of desc(tbl, 'a', 'tc')) {
-    const tx = kid(tc, 'txBody', 'a'); if (tx) styleTxBody(tx, ctx, true);
+    const tx = kid(tc, 'txBody', 'a'); if (tx) styleTxBody(tx, ctx, txMode || 'table');
     let tcPr = kid(tc, 'tcPr', 'a');
     if (!tcPr) { tcPr = mk(doc, 'a', 'tcPr'); const ext = kid(tc, 'extLst', 'a'); tc.insertBefore(tcPr, ext); }
     removeKids(tcPr, ['lnL', 'lnR', 'lnT', 'lnB', ...FILLS]);
@@ -476,11 +480,17 @@ function darkXml(slideXml, pkg, ctxIn) {
   // shapes, text, tables (skip the Fallback copies of equations)
   const tree = spTreeOf(doc);
   if (!skip.has('shapes')) for (const c of [...desc(tree, 'p', 'sp'), ...desc(tree, 'p', 'cxnSp')]) if (!inFallback(c)) styleShapeProps(c, ctx);
-  if (!skip.has('text')) for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, hasAncestor(tx, e => e.localName === 'grpSp') ? 'group' : false);
-  if (!skip.has('tables')) for (const tbl of desc(tree, 'a', 'tbl')) styleTable(tbl, ctx);
+  // zoom (default): the part keeps its own arrangement and is enlarged as one piece; text keeps its layout
+  const zoom = ctx.layoutMode !== 'stack';
+  if (!skip.has('text')) for (const tx of desc(tree, 'p', 'txBody')) if (!inFallback(tx)) styleTxBody(tx, ctx, zoom || hasAncestor(tx, e => e.localName === 'grpSp') ? 'group' : false);
+  if (!skip.has('tables')) for (const tbl of desc(tree, 'a', 'tbl')) styleTable(tbl, ctx, zoom ? 'group' : 'table');
   // big pictures: white lines on the dark background
   const W = pkg.slideW, H = pkg.slideH;
   if (ctx.images !== false && !skip.has('images')) for (const t of keep) if (t.kind === 'pic' && Math.max(t.g.w, t.g.h) >= 80 * PT) { if (duotone(core(t.el), ctx)) report.duotone++; }
+  if (zoom) {
+    const plan = skip.has('layout') ? { mode: 'zoom', items: [], bottom: 0 } : zoomPart(keep, pkg, ctx, report);
+    return { xml: serialize(doc), plan, report };
+  }
   // first layout guess in the XML (the add-in refines it with real heights)
   const plan = layout(keep.filter(t => !t.hidden), pkg, ctx);
   if (!skip.has('layout')) for (const s of plan.items) {
@@ -493,6 +503,53 @@ function darkXml(slideXml, pkg, ctxIn) {
   const order = topItems(doc);
   for (const s of plan.items) s.idx = order.indexOf(keep.find(k => k.i === s.i).el);
   return { xml: serialize(doc), plan, report };
+}
+
+// enlarge the whole part as one piece so it fills the slide; every position, size, text size and line keeps its proportion
+function zoomPart(keep, pkg, ctx, report) {
+  const W = pkg.slideW, H = pkg.slideH;
+  const vis = keep.filter(t => !t.hidden && t.g.w > 0);
+  if (!vis.length) return { mode: 'zoom', items: [], bottom: MARGIN };
+  const x0 = Math.min(...vis.map(t => t.g.x)), y0 = Math.min(...vis.map(t => t.g.y));
+  const bw = Math.max(...vis.map(t => t.g.x + t.g.w)) - x0, bh = Math.max(...vis.map(t => t.g.y + t.g.h)) - y0;
+  let maxSz = 0;
+  for (const t of vis) for (const r of desc(core(t.el), 'a', 'rPr')) maxSz = Math.max(maxSz, +(r.getAttribute('sz') || 0));
+  let k = Math.min((W - 2 * MARGIN) / (bw || 1), (H - 2 * MARGIN) / (bh || 1), 4);
+  if (maxSz) k = Math.min(k, 6000 / maxSz); // the biggest text never goes past 60 pt
+  k = Math.max(k, 0.2);
+  const ox = MARGIN + ((W - 2 * MARGIN) - bw * k) / 2, oy = MARGIN;
+  for (const t of keep) {
+    setGeom(t.el, { x: ox + (t.g.x - x0) * k, y: oy + (t.g.y - y0) * k, w: t.g.w * k, h: t.g.h * k });
+    scaleContent(t.el, k, pkg, !!phOf(t.el));
+  }
+  // smallest body text after zooming (pt)
+  let minSz = Infinity;
+  for (const t of vis) for (const r of [...desc(core(t.el), 'a', 'rPr'), ...desc(core(t.el), 'a', 'defRPr')]) { const v = +(r.getAttribute('sz') || 0); if (v) minSz = Math.min(minSz, v); }
+  report.minPt = isFinite(minSz) ? Math.round(minSz / 100) : 0;
+  report.zoom = k;
+  return { mode: 'zoom', items: [], bottom: oy + bh * k };
+}
+function scaleContent(el, k, pkg, isPh) {
+  const c = core(el); if (!c) return;
+  const mul = (e, at, def) => { const v = e.getAttribute(at); const n = v == null ? def : +v; if (n != null && isFinite(n)) e.setAttribute(at, Math.round(n * k)); };
+  // text sizes (missing sizes: the presentation's default size, except in placeholders which follow their layout)
+  for (const r of [...desc(c, 'a', 'rPr'), ...desc(c, 'a', 'endParaRPr'), ...desc(c, 'a', 'defRPr')]) {
+    if (r.getAttribute('sz')) { r.setAttribute('sz', Math.max(100, Math.min(400000, Math.round(+r.getAttribute('sz') * k)))); continue; }
+    if (isPh || r.localName === 'defRPr') continue;
+    let tx = null; for (let e = r.parentNode; e && e.nodeType === 1; e = e.parentNode) if (e.localName === 'txBody') { tx = e; break; }
+    const lst = tx && desc(kid(tx, 'lstStyle', 'a'), 'a', 'defRPr').find(d => d.getAttribute('sz'));
+    if (!lst) r.setAttribute('sz', Math.round(pkg.baseSz * k));
+  }
+  // inner margins, indents, fixed spacing, line widths
+  for (const b of desc(c, 'a', 'bodyPr')) { mul(b, 'lIns', 91440); mul(b, 'rIns', 91440); mul(b, 'tIns', 45720); mul(b, 'bIns', 45720); }
+  for (const p of [...desc(c, 'a', 'pPr'), ...['lvl1pPr', 'lvl2pPr', 'lvl3pPr'].flatMap(n => desc(c, 'a', n))]) for (const at of ['marL', 'marR', 'indent']) if (p.getAttribute(at)) mul(p, at);
+  for (const sp of desc(c, 'a', 'spcPts')) mul(sp, 'val');
+  for (const ln of desc(c, 'a', 'ln')) if (ln.getAttribute('w')) mul(ln, 'w');
+  for (const s of ['lnL', 'lnR', 'lnT', 'lnB']) for (const ln of desc(c, 'a', s)) if (ln.getAttribute('w')) mul(ln, 'w');
+  // tables: columns, rows and cell margins
+  for (const g of desc(c, 'a', 'gridCol')) mul(g, 'w');
+  for (const tr of desc(c, 'a', 'tr')) if (tr.getAttribute('h')) mul(tr, 'h');
+  for (const tc of desc(c, 'a', 'tcPr')) { mul(tc, 'marL', 91440); mul(tc, 'marR', 91440); mul(tc, 'marT', 45720); mul(tc, 'marB', 45720); }
 }
 // layout: full-width stack, or title + picture (left) + texts/tables (right)
 function layout(keep, pkg, ctx) {

@@ -60,6 +60,7 @@ async function refine(id, plan) {
   return run(async ctx => {
     const shapes = ctx.presentation.slides.getItem(id).shapes;
     shapes.load('items/id'); await ctx.sync();
+    if (!plan.items.length) return plan.bottom / PT;
     const L = plan.items.map(s => ({ s, sh: shapes.items[s.idx] }));
     if (L.some(x => !x.sh)) return plan.bottom / PT;
     const texts = L.filter(x => x.s.kind === 'text');
@@ -128,7 +129,7 @@ async function doDark(ids) {
           rep = d.report;
           stage = 'stLayout';
           bottom = await refine(newId, d.plan);
-          if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
+          if (d.plan.mode === 'zoom' || bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
           await deleteSlide(newId);
         }
         if (fallbacks.length && fallbacks[fallbacks.length - 1][1] === null) fallbacks[fallbacks.length - 1][1] = newId;
@@ -136,6 +137,7 @@ async function doDark(ids) {
         prev = newId;
         done.push(newId);
         if (lvl > 0) small.push([newId, LEVELS[lvl] / 100]);
+        else if (rep && rep.minPt && rep.minPt < 20) small.push([newId, rep.minPt]);
         if (bottom > slideHpt - UD.MARGIN / PT + 0.5) over.push(newId);
         if (rep && rep.duotone) gray.push(newId);
       }
