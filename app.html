@@ -279,37 +279,39 @@ function recolorRef(ref, ctx) {
 }
 
 // ---------- package ----------
+const readText = async f => new TextDecoder('utf-8').decode(await f.async('uint8array'));
 async function openPackage(b64) {
   const zip = await JSZip.loadAsync(b64, { base64: true });
   const names = Object.keys(zip.files);
   const slidePath = names.find(n => /^ppt\/slides\/slide\d+\.xml$/.test(n));
-  const files = { slide: await zip.file(slidePath).async('string') };
+  const files = { slide: await readText(zip.file(slidePath)) };
   const pres = zip.file('ppt/presentation.xml');
   let slideW = 12192000, slideH = 6858000;
   if (pres) {
-    const sz = desc(parseXml(await pres.async('string')), 'p', 'sldSz')[0];
+    const sz = desc(parseXml(await readText(pres)), 'p', 'sldSz')[0];
     if (sz) { slideW = +sz.getAttribute('cx'); slideH = +sz.getAttribute('cy'); }
   }
   const th = names.find(n => /^ppt\/theme\/theme\d+\.xml$/.test(n));
-  if (th) files.theme = await zip.file(th).async('string');
+  if (th) files.theme = await readText(zip.file(th));
   // layout + master of this slide, for placeholders without their own position
   const relPath = slidePath.replace('slides/', 'slides/_rels/') + '.rels';
   const layouts = [];
   try {
-    const rels = parseXml(await zip.file(relPath).async('string'));
+    const rels = parseXml(await readText(zip.file(relPath)));
     const lr = desc(rels, 'rel', 'Relationship').find(r => /slideLayout$/.test(r.getAttribute('Type')));
     if (lr) {
       const lp = 'ppt/slideLayouts/' + lr.getAttribute('Target').split('/').pop();
-      layouts.push(await zip.file(lp).async('string'));
-      const lrels = parseXml(await zip.file(lp.replace('slideLayouts/', 'slideLayouts/_rels/') + '.rels').async('string'));
+      layouts.push(await readText(zip.file(lp)));
+      const lrels = parseXml(await readText(zip.file(lp.replace('slideLayouts/', 'slideLayouts/_rels/') + '.rels')));
       const mr = desc(lrels, 'rel', 'Relationship').find(r => /slideMaster$/.test(r.getAttribute('Type')));
-      if (mr) layouts.push(await zip.file('ppt/slideMasters/' + mr.getAttribute('Target').split('/').pop()).async('string'));
+      if (mr) layouts.push(await readText(zip.file('ppt/slideMasters/' + mr.getAttribute('Target').split('/').pop())));
     }
   } catch (e) { /* no layout info */ }
   return { zip, slidePath, files, slideW, slideH, layouts: layouts.map(parseXml) };
 }
 async function buildPackage(pkg, slideXml) {
-  pkg.zip.file(pkg.slidePath, slideXml);
+  // write bytes, not a string: JSZip splits long strings into chunks and can cut a math letter (like 𝑖) in half
+  pkg.zip.file(pkg.slidePath, new TextEncoder().encode(slideXml));
   return pkg.zip.generateAsync({ type: 'base64', compression: 'DEFLATE' });
 }
 
