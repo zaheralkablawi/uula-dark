@@ -84,6 +84,12 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .tabs button{font:inherit;font-size:.86rem;font-weight:600;height:32px;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
 .tabs button[aria-selected="true"]{background:var(--panel);color:var(--accent);box-shadow:0 1px 3px rgb(0 0 0 / .12)}
 .tabpage{display:grid;gap:10px}
+
+.seg button{height:auto;min-height:32px;padding:4px 3px;line-height:1.25}
+.seg3{grid-template-columns:repeat(3,1fr)}.seg3 button{font-size:.8rem}
+.seg button:disabled{color:#b7bec9;cursor:not-allowed;background:var(--panel)}
+.langbtn{font:600 .8rem var(--f);color:var(--muted)}
+[dir="ltr"] h1{margin-left:0;margin-right:auto}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -107,88 +113,99 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 <div class="wrap">
   <header>
     <h1><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="#1f71de" stroke-width="2.6"/><path d="M16 3.5a12.5 12.5 0 0 1 0 25z" fill="#1f71de"/></svg><span class="bt"><span class="root">UULA</span><span class="sub">Dark</span></span></h1>
-    <button type="button" class="ib updbtn" id="updBtn" hidden aria-label="تحديث جديد" title="تحديث جديد"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.2 3.2v3.5h-3.5"/></svg><span class="dot"></span></button>
+    <button type="button" class="ib updbtn" id="updBtn" hidden data-i18n-title="update"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.2 3.2v3.5h-3.5"/></svg><span class="dot"></span></button>
+    <button type="button" class="ib langbtn" id="langBtn" data-i18n="langBtn" data-i18n-title="langName"></button>
     <div class="appmenu">
-      <button type="button" class="ib" id="menuBtn" aria-expanded="false" title="القائمة" aria-label="القائمة"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
+      <button type="button" class="ib" id="menuBtn" aria-expanded="false" data-i18n-title="menu"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
       <div class="menu" id="appMenu" hidden>
-        <button type="button" id="chkUpd">التحقق من التحديثات</button>
-        <button type="button" id="aboutBtn">حول الأداة</button>
+        <button type="button" id="chkUpd" data-i18n="chkUpd"></button>
+        <button type="button" id="langItem" data-i18n="langName"></button>
+        <button type="button" id="aboutBtn" data-i18n="about"></button>
       </div>
     </div>
   </header>
   <div class="tabs" id="tabs" role="tablist">
-    <button type="button" role="tab" data-t="dark" aria-selected="true">التحويل إلى الداكن</button>
-    <button type="button" role="tab" data-t="title" aria-selected="false">شريحة العنوان</button>
+    <button type="button" role="tab" data-t="dark" aria-selected="true" data-i18n="tabDark"></button>
+    <button type="button" role="tab" data-t="title" aria-selected="false" data-i18n="tabTitle"></button>
   </div>
-  <div class="tabpage" id="pageDark">
 
+  <div class="tabpage" id="pageDark">
   <section class="panel">
-    <span class="label">قبل التحويل: خطوتان تقوم بهما أنت</span>
+    <span class="label" data-i18n="stepsLabel"></span>
     <div class="step" id="step1">
-      <span class="circ">١</span>
+      <span class="circ" data-i18n="n1"></span>
       <div class="sbody">
-        <b>أضف فواصل</b>
-        <span class="note">اضغط الزر ثم اسحب الفاصل بين كل جزأين تريد فصلهما. لا تُعتمد إلا الفواصل المضافة من هنا.</span>
+        <b data-i18n="s1Title"></b>
+        <span class="note" data-i18n="s1Note"></span>
         <div class="srow">
-          <button type="button" class="mini" id="addSep"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h12"/></svg> أضف فواصل</button>
-          <label class="chk"><input type="checkbox" id="s1Done"> تمت إضافة الفواصل</label>
+          <button type="button" class="mini" id="addSep"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h12"/></svg> <span data-i18n="addSep"></span></button>
+          <label class="chk"><input type="checkbox" id="s1Done"> <span data-i18n="s1Done"></span></label>
         </div>
       </div>
     </div>
     <div class="step" id="step2">
-      <span class="circ">٢</span>
+      <span class="circ" data-i18n="n2"></span>
       <div class="sbody">
-        <b>حوّل مقاس الشرائح إلى 16:9</b>
-        <span class="note">من تبويب تصميم ← حجم الشريحة ← شاشة عريضة (16:9).</span>
-        <div class="srow"><label class="chk"><input type="checkbox" id="s2Done"> تم تحويل المقاس</label></div>
+        <b data-i18n="s2Title"></b>
+        <span class="note" data-i18n="s2Note"></span>
+        <div class="srow"><label class="chk"><input type="checkbox" id="s2Done"> <span data-i18n="s2Done"></span></label></div>
       </div>
     </div>
   </section>
 
   <section class="darkcard">
-    <div class="dhead"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffe600" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><b>التحويل إلى الوضع الداكن</b></div>
+    <div class="dhead"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#ffe600" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><b data-i18n="darkHead"></b></div>
     <div class="seg dseg" id="scope">
-      <button type="button" data-v="sel" aria-pressed="false">الشرائح المحددة</button>
-      <button type="button" data-v="all" aria-pressed="true">كل الشرائح</button>
+      <button type="button" data-v="sel" aria-pressed="false" data-i18n="scopeSel"></button>
+      <button type="button" data-v="all" aria-pressed="true" data-i18n="scopeAll"></button>
     </div>
-    <button type="button" class="dbtn" id="darkBtn">تحويل</button>
-    <div class="dlock" id="lockNote">أكمل الخطوتين ١ و٢ أولًا.</div>
+    <button type="button" class="dbtn" id="darkBtn" data-i18n="convert"></button>
+    <div class="dlock" id="lockNote"></div>
     <div class="prog" id="prog" hidden><i></i></div>
     <div class="status" id="status" role="status"></div>
     <div class="res" id="res"></div>
   </section>
 
-
   <section class="panel">
-    <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
+    <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span data-i18n="settings"></span></button>
     <div id="setBody" hidden style="display:grid;gap:8px">
-      <div class="row"><span>لون الخلفية</span><span class="cwrap"><button type="button" class="colorbtn" data-k="bg"><span class="sw"></span></button></span></div>
-      <div class="row"><span>لون النص</span><span class="cwrap"><button type="button" class="colorbtn" data-k="text"><span class="sw"></span></button></span></div>
-      <div class="row"><span>الأزرق يصير</span><span class="cwrap"><button type="button" class="colorbtn" data-k="accent"><span class="sw"></span></button></span></div>
-      <label class="chk"><input type="checkbox" id="imgChk" checked> تلوين الصور الكبيرة بالأبيض</label>
-      <div class="row"><span class="note">الخط: UULA Sans Medium</span><button type="button" class="mini" id="resetBtn">استعادة الافتراضي</button></div>
+      <div class="row"><span data-i18n="bgColor"></span><span class="cwrap"><button type="button" class="colorbtn" data-k="bg"><span class="sw"></span></button></span></div>
+      <div class="row"><span data-i18n="textColor"></span><span class="cwrap"><button type="button" class="colorbtn" data-k="text"><span class="sw"></span></button></span></div>
+      <div class="row"><span data-i18n="accentColor"></span><span class="cwrap"><button type="button" class="colorbtn" data-k="accent"><span class="sw"></span></button></span></div>
+      <label class="chk"><input type="checkbox" id="imgChk" checked> <span data-i18n="imgChk"></span></label>
+      <div class="row"><span class="note" data-i18n="fontNote"></span><button type="button" class="mini" id="resetBtn" data-i18n="reset"></button></div>
     </div>
   </section>
   </div>
+
   <div class="tabpage" id="pageTitle" hidden>
   <section class="panel" id="titlePanel">
-        <div class="seg seg4" id="tType">
-      <button type="button" data-v="explain" aria-pressed="true">الشرح</button>
-      <button type="button" data-v="better" aria-pressed="false">الزبدة</button>
-      <button type="button" data-v="bank" aria-pressed="false">بنك الأسئلة</button>
-      <button type="button" data-v="practice" aria-pressed="false">التدريبات</button>
+    <div class="seg seg4" id="tType">
+      <button type="button" data-v="explain" aria-pressed="true" data-i18n="tExplain"></button>
+      <button type="button" data-v="better" aria-pressed="false" data-i18n="tBetter"></button>
+      <button type="button" data-v="bank" aria-pressed="false" data-i18n="tBank"></button>
+      <button type="button" data-v="practice" aria-pressed="false" data-i18n="tPractice"></button>
     </div>
     <div class="thumbs" id="tThumbs"></div>
-    <input type="text" class="tin" id="tTitle" placeholder="عنوان الفيديو" dir="rtl">
-    <input type="text" class="tin" id="tSub" placeholder="العنوان الثانوي (اختياري)" dir="rtl">
-    <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span>إدراج شريحة العنوان<small>بعد الشريحة المحددة</small></span></button>
+    <input type="text" class="tin" id="tTitle" data-i18n-ph="tTitlePh" dir="auto">
+    <input type="text" class="tin" id="tSub" data-i18n-ph="tSubPh" dir="auto">
+    <span class="label" data-i18n="posLabel"></span>
+    <div class="seg seg3" id="tPos">
+      <button type="button" data-v="start" aria-pressed="true" data-i18n="posStart"></button>
+      <button type="button" data-v="before" aria-pressed="false" data-i18n="posBefore"></button>
+      <button type="button" data-v="after" aria-pressed="false" data-i18n="posAfter"></button>
+    </div>
+    <div class="note" id="tSelNote" hidden data-i18n="tNeedSel"></div>
+    <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span data-i18n="tInsert"></span></button>
     <div class="status" id="tStatus"></div>
   </section>
   </div>
+
   <div class="cpop" id="cpop" hidden></div><input type="color" id="custom" class="vh" tabindex="-1" aria-hidden="true">
-  <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px">إغلاق</button></div></div>
+  <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px" data-i18n="close"></button></div></div>
   <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.0</span></footer>
 </div>
+<script>/*I18N*/</script>
 <script>/*JSZIP*/</script>
 <script>/*ENGINE*/</script>
 <script>/*APP*/</script>

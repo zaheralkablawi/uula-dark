@@ -16,7 +16,7 @@ const say = (m, cls) => { status.textContent = m || ''; status.className = 'stat
 const prog = f => { $('prog').hidden = f == null; if (f != null) $('prog').firstElementChild.style.width = Math.round(f * 100) + '%'; };
 function line(cls, html) { const d = document.createElement('div'); d.className = 'ln ' + cls; d.innerHTML = html; res.appendChild(d); return d; }
 function slideLinks(ids, nums) {
-  return ids.map((id, k) => '<a data-id="' + id + '">' + nums[k] + '</a>').join('، ');
+  return ids.map((id, k) => '<a data-id="' + id + '">' + nums[k] + '</a>').join(T('sep'));
 }
 res.addEventListener('click', e => {
   const a = e.target.closest('a[data-id]'); if (!a) return;
@@ -94,15 +94,15 @@ async function refine(id, plan) {
 const LEVELS = ['3600', '3200', '3000'];
 // if PowerPoint refuses the converted slide, retry without parts of the conversion (also tells us which part)
 const SKIPS = [[], ['layout'], ['images'], ['tables'], ['shapes'], ['text'], ['layout', 'images', 'tables', 'shapes']];
-const SKIP_AR = { layout: 'الترتيب', images: 'تلوين الصور', tables: 'الجداول', shapes: 'الأشكال', text: 'النصوص' };
+
 async function doDark(ids) {
   const done = [], small = [], over = [], gray = [], skipped = [], errs = [];
   let srcCount = 0; const fallbacks = [], titles = [];
   const ctxBase = { bg: st.bg.slice(1).toUpperCase(), text: st.text.slice(1).toUpperCase(), accent: st.accent.slice(1).toUpperCase(), title: '4800', font: 'UULA Sans Medium', images: st.images };
   for (let k = 0; k < ids.length; k++) {
-    prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
+    prog(k / ids.length); say(T('converting', k + 1, ids.length));
     const id = ids[k];
-    let stage = 'قراءة الشريحة', origB64 = null;
+    let stage = 'stRead', origB64 = null;
     try {
       const mark = await slideMark(id);
       if (mark === 'title') { titles.push(id); continue; }
@@ -117,7 +117,7 @@ async function doDark(ids) {
       for (const base of parts) {
         let newId = null, lvl = 0, bottom = 0, rep = null;
         for (lvl = 0; lvl < LEVELS.length; lvl++) {
-          stage = 'إدراج الشريحة';
+          stage = 'stInsert';
           let d = null, lastErr = null;
           for (const sk of SKIPS) {
             d = UD.darkXml(base, pkg, Object.assign({}, ctxBase, { body: LEVELS[lvl], skip: sk }));
@@ -126,7 +126,7 @@ async function doDark(ids) {
           }
           if (lastErr) throw lastErr;
           rep = d.report;
-          stage = 'ترتيب المحتوى';
+          stage = 'stLayout';
           bottom = await refine(newId, d.plan);
           if (bottom <= slideHpt - UD.MARGIN / PT + 0.5 || lvl === LEVELS.length - 1) break;
           await deleteSlide(newId);
@@ -139,35 +139,34 @@ async function doDark(ids) {
         if (bottom > slideHpt - UD.MARGIN / PT + 0.5) over.push(newId);
         if (rep && rep.duotone) gray.push(newId);
       }
-      stage = 'حذف الأصل';
+      stage = 'stDelete';
       await deleteSlide(id);
       srcCount++;
     } catch (e) {
       let extra = '';
-      if (stage === 'إدراج الشريحة' && origB64) {
+      if (stage === 'stInsert' && origB64) {
         // diagnosis: can the untouched slide be inserted? then the problem is in the converted XML
-        try { const t = await insertAfter(origB64, id); await deleteSlide(t); extra = ' — الأصل يُدرج بنجاح، المشكلة في الملف المحوَّل'; }
-        catch (e2) { extra = ' — حتى الأصل لا يُدرج: ' + errText(e2); }
+        try { const t = await insertAfter(origB64, id); await deleteSlide(t); extra = T('diagOk'); }
+        catch (e2) { extra = T('diagBad') + errText(e2); }
       }
-      errs.push(stage + ': ' + errText(e) + extra);
+      errs.push(T(stage) + ': ' + errText(e) + extra);
     }
   }
   prog(null);
   const all = await allIds(), num = i => all.indexOf(i) + 1;
   res.innerHTML = '';
-  if (done.length) line('ok', '✓ ' + cnt(srcCount) + ' ← ' + cnt(done.length) + ' داكنة: ' + slideLinks(done, done.map(num)));
-  if (small.length) line('warn', '• صُغّر الخط: ' + small.map(([i, s]) => '<a data-id="' + i + '">' + num(i) + '</a> (' + s + ')').join('، '));
-  if (over.length) line('err', '• ممتلئة، قسّمها يدويًا: ' + slideLinks(over, over.map(num)));
-  if (gray.length) line('warn', '• صور فقدت ألوانها: ' + slideLinks(gray, gray.map(num)));
-  if (skipped.length) line('warn', '• محوّلة سابقًا: ' + cnt(skipped.length));
-  if (titles.length) line('', '<span class="note">تُركت شرائح العنوان كما هي: ' + cnt(titles.length) + '</span>');
-  fallbacks.forEach(([sk, i]) => { if (i) line('warn', '• شريحة <a data-id="' + i + '">' + num(i) + '</a> حُوّلت بدون: ' + sk.map(k => SKIP_AR[k]).join('، ')); });
+  if (done.length) line('ok', T('resDone', srcCount, done.length) + slideLinks(done, done.map(num)));
+  if (small.length) line('warn', T('resSmall') + small.map(([i, s]) => '<a data-id="' + i + '">' + num(i) + '</a> (' + s + ')').join(T('sep')));
+  if (over.length) line('err', T('resOver') + slideLinks(over, over.map(num)));
+  if (gray.length) line('warn', T('resGray') + slideLinks(gray, gray.map(num)));
+  if (skipped.length) line('warn', T('resSkipped', skipped.length));
+  if (titles.length) line('', '<span class="note">' + T('resTitles', titles.length) + '</span>');
+  fallbacks.forEach(([sk, i]) => { if (i) line('warn', T('resFallback').replace('{n}', '<a data-id="' + i + '">' + num(i) + '</a>') + sk.map(k => T('skip')[k]).join(T('sep'))); });
   errs.forEach(m => line('err', '✗ ' + esc(m)));
-  if (done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans Medium على الجهاز.</span>');
-  say(done.length ? 'تم التحويل.' : 'لم يتم تحويل أي شريحة.');
+  if (done.length) line('', '<span class="note">' + T('fontNeeded') + '</span>');
+  say(done.length ? T('doneMsg') : T('noneMsg'));
 }
 const errText = e => { const loc = e && e.debugInfo && e.debugInfo.errorLocation; return (e && (e.code || e.message) || String(e)) + (loc ? ' (' + loc + ')' : ''); };
-const cnt = n => n === 1 ? 'شريحة واحدة' : n === 2 ? 'شريحتان' : n <= 10 ? n + ' شرائح' : n + ' شريحة';
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
 async function go(fn) {
@@ -175,9 +174,9 @@ async function go(fn) {
   busy = true; refreshLock(); res.innerHTML = '';
   try {
     const ids = await targetIds();
-    if (!ids.length) { say('حدّد شريحة أولًا.', ''); return; }
+    if (!ids.length) { say(T('selFirst')); return; }
     await fn(ids);
-  } catch (e) { prog(null); say('حدث خطأ: ' + (e.message || e)); }
+  } catch (e) { prog(null); say(T('errPrefix') + (e.message || e)); }
   finally { busy = false; refreshLock(); }
 }
 $('darkBtn').addEventListener('click', () => go(doDark));
@@ -190,9 +189,9 @@ function refreshLock() {
   $('darkBtn').disabled = busy || !canConvert();
   $('step1').classList.toggle('done', step1);
   $('step2').classList.toggle('done', step2ok());
-  const miss = [!step1 && '١', !step2ok() && '٢'].filter(Boolean);
+  const miss = [!step1 && 1, !step2ok() && 2].filter(Boolean);
   $('lockNote').hidden = !supported || !miss.length;
-  $('lockNote').textContent = miss.length === 2 ? 'أكمل الخطوتين ١ و٢ أولًا.' : 'أكمل الخطوة ' + (miss[0] || '') + ' أولًا.';
+  $('lockNote').textContent = miss.length === 2 ? T('lockBoth') : T('lockOne', miss[0]);
 }
 // step 1: remembered inside the presentation file
 function docSettings() { try { return Office.context.document.settings; } catch (e) { return null; } }
@@ -206,7 +205,7 @@ $('addSep').addEventListener('click', async () => {
   try {
     await run(async ctx => {
       const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id'); await ctx.sync();
-      if (!sel.items.length) { say('حدّد شريحة أولًا.'); return; }
+      if (!sel.items.length) { say(T('selFirst')); return; }
       const slide = sel.items[0];
       let W = 960, H = 540;
       try { const pkg = await UD.openPackage(await exportSlide(slide.id)); W = pkg.slideW / PT; H = pkg.slideH / PT; } catch (e) {}
@@ -218,9 +217,9 @@ $('addSep').addEventListener('click', async () => {
       ln.lineFormat.visible = false;
       ln.load('id'); await ctx.sync();
       try { slide.setSelectedShapes([ln.id]); await ctx.sync(); } catch (e) {}
-      say('اسحب الفاصل إلى مكانه.');
+      say(T('dragSep'));
     });
-  } catch (e) { say('تعذّرت إضافة الفاصل: ' + (e.message || e)); }
+  } catch (e) { say(T('sepFail') + (e.message || e)); }
 });
 // step 2: the user changes the slide size himself and ticks the box
 function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings(); if (s) { s.set('udStep2', v); s.saveAsync(); } refreshLock(); }
@@ -233,7 +232,7 @@ function paintTitle() {
   $('tType').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === tType)));
   const box = $('tThumbs'); box.innerHTML = '';
   for (let k = 1; k <= 3; k++) {
-    const b = document.createElement('button'); b.type = 'button'; b.title = 'نمط ' + k;
+    const b = document.createElement('button'); b.type = 'button'; b.title = T('style', k);
     b.setAttribute('aria-pressed', String(k === tVar));
     const im = document.createElement('img'); im.src = 'templates/title-' + tType + '-' + k + '.jpg'; im.alt = '';
     b.appendChild(im); b.addEventListener('click', () => { tVar = k; save('ud-tvar', k); paintTitle(); });
@@ -252,12 +251,34 @@ function fillPlaceholder(doc, idx, text) {
   rp.setAttribute('lang', 'ar-SA'); t.textContent = text; r.appendChild(rp); r.appendChild(t); p.appendChild(r); tx.appendChild(p);
 }
 const tSay = m => { $('tStatus').textContent = m || ''; };
+let tPos = load('ud-tpos', 'start'), hasSel = false;
+function paintPos() {
+  $('tPos').querySelectorAll('button').forEach(b => {
+    b.disabled = b.dataset.v !== 'start' && !hasSel;
+    b.setAttribute('aria-pressed', String(b.dataset.v === tPos));
+  });
+  $('tSelNote').hidden = hasSel;
+}
+function setPos(v) { tPos = v; save('ud-tpos', v); paintPos(); }
+$('tPos').addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.disabled) setPos(b.dataset.v); });
+let selBusy = false;
+async function refreshSel() {
+  if (!supported || selBusy) return;
+  selBusy = true;
+  try {
+    await run(async ctx => { const s = ctx.presentation.getSelectedSlides(); s.load('items/id'); await ctx.sync(); hasSel = s.items.length > 0; });
+  } catch (e) { hasSel = false; }
+  selBusy = false;
+  if (!hasSel && tPos !== 'start') tPos = 'start';
+  paintPos();
+}
+paintPos();
 $('tInsert').addEventListener('click', async () => {
   if (!supported || busy) return;
-  busy = true; refreshLock(); $('tInsert').disabled = true; tSay('جارٍ الإدراج…');
+  busy = true; refreshLock(); $('tInsert').disabled = true; tSay(T('inserting'));
   try {
     const r = await fetch('templates/title-' + tType + '-' + tVar + '.pptx', { cache: 'no-cache' });
-    if (!r.ok) throw new Error('تعذّر تحميل القالب');
+    if (!r.ok) throw new Error(T('tplFail'));
     const pkg = await UD.openPackage(b64of(await r.arrayBuffer()));
     const doc = UD.parseXml(pkg.files.slide);
     fillPlaceholder(doc, 10, $('tTitle').value.trim());
@@ -267,23 +288,38 @@ $('tInsert').addEventListener('click', async () => {
       const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id');
       const all = ctx.presentation.slides; all.load('items/id'); await ctx.sync();
       const opts = { formatting: 'KeepSourceFormatting' };
-      if (sel.items.length) opts.targetSlideId = sel.items[sel.items.length - 1].id;
+      const ids = all.items.map(x => x.id), selIds = sel.items.map(x => x.id);
+      if (tPos === 'after' && selIds.length) opts.targetSlideId = selIds[selIds.length - 1];
+      if (tPos === 'before' && selIds.length) {
+        const first = Math.min(...selIds.map(i => ids.indexOf(i)));
+        if (first > 0) opts.targetSlideId = ids[first - 1];
+      }
+      if ((tPos === 'before' || tPos === 'after') && !selIds.length) throw new Error(T('selFirst'));
       ctx.presentation.insertSlidesFromBase64(b64, opts); await ctx.sync();
       const after = ctx.presentation.slides; after.load('items/id'); await ctx.sync();
       const before = new Set(all.items.map(x => x.id));
       const added = after.items.find(x => !before.has(x.id));
       if (added) { added.tags.add('UULATITLE', '1'); await ctx.sync(); try { ctx.presentation.setSelectedSlides([added.id]); await ctx.sync(); } catch (e) {} }
     });
-    tSay('✓ تم إدراج شريحة العنوان.');
-  } catch (e) { tSay('تعذّر الإدراج: ' + errText(e)); }
+    tSay(T('inserted'));
+  } catch (e) { tSay(T('insertFail') + errText(e)); }
   finally { busy = false; $('tInsert').disabled = false; refreshLock(); }
 });
+
+// ---------- language ----------
+function setLang(l) {
+  I18N.set(l); paintTitle(); paintPos(); refreshLock(); closeColors();
+  if (!busy) { say(''); tSay(''); res.innerHTML = ''; }
+}
+$('langBtn').addEventListener('click', () => setLang(I18N.lang === 'ar' ? 'en' : 'ar'));
+$('langItem').addEventListener('click', () => { menu(false); setLang(I18N.lang === 'ar' ? 'en' : 'ar'); });
 
 // ---------- two menus: dark conversion / title slide ----------
 function setTab(t) {
   save('ud-tab', t);
   $('tabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
   $('pageDark').hidden = t !== 'dark'; $('pageTitle').hidden = t !== 'title';
+  if (t === 'title') refreshSel();
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
 setTab(load('ud-tab', 'dark'));
@@ -302,7 +338,7 @@ function paintSwatches() { document.querySelectorAll('.colorbtn').forEach(b => {
 paintSwatches();
 
 // ---------- color picker (standard for all tools) ----------
-const COLORS = [['أبيض', '#ffffff'], ['أسود', '#000000'], ['أزرق', '#1f71de'], ['أرجواني', '#fe00fe'], ['أصفر', '#ffe600']];
+const COLORS = [['cWhite', '#ffffff'], ['cBlack', '#000000'], ['cBlue', '#1f71de'], ['cMagenta', '#fe00fe'], ['cYellow', '#ffe600']];
 const THEME = ['#ffffff', '#000000', '#e7e6e6', '#44546a', '#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47'];
 const STANDARD = ['#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050', '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0'];
 function hex2hsl(h) {
@@ -336,14 +372,14 @@ function swatch(c, title) {
 function buildColors() {
   cpop.innerHTML = '';
   const lab = t => { const d = document.createElement('div'); d.className = 'clab'; d.textContent = t; cpop.appendChild(d); };
-  lab('ألوان المذكرة');
-  const mine = document.createElement('div'); mine.className = 'mine'; for (const [n, c] of COLORS) mine.appendChild(swatch(c, n)); cpop.appendChild(mine);
-  lab('ألوان أخرى');
+  lab(T('brand'));
+  const mine = document.createElement('div'); mine.className = 'mine'; for (const [n, c] of COLORS) mine.appendChild(swatch(c, T(n))); cpop.appendChild(mine);
+  lab(T('others'));
   const top = document.createElement('div'); top.className = 'crow'; THEME.forEach(c => top.appendChild(swatch(c))); cpop.appendChild(top);
   const grid = document.createElement('div'); grid.className = 'ccol'; const sh = THEME.map(shades);
   for (let k = 0; k < 5; k++) THEME.forEach((_, i) => grid.appendChild(swatch(sh[i][k]))); cpop.appendChild(grid);
   const std = document.createElement('div'); std.className = 'crow'; STANDARD.forEach(c => std.appendChild(swatch(c))); cpop.appendChild(std);
-  const more = document.createElement('button'); more.type = 'button'; more.className = 'more'; more.textContent = 'لون آخر…';
+  const more = document.createElement('button'); more.type = 'button'; more.className = 'more'; more.textContent = T('moreColor');
   more.addEventListener('click', () => { const k = cKey; closeColors(); custom.value = st[k]; custom.dataset.k = k; custom.click(); });
   cpop.appendChild(more);
   cpop.querySelectorAll('button.c').forEach(b => b.classList.toggle('on', b.dataset.c.toLowerCase() === String(st[cKey]).toLowerCase()));
@@ -369,8 +405,7 @@ $('modalX').addEventListener('click', () => { $('modal').hidden = true; });
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
-  modal('حول الأداة', '<p>تحوّل أوراق العمل إلى شرائح داكنة للعرض على الطلاب: شريحة لكل جزء بين فاصلين.</p><p>قبل التحويل: أضف الفواصل بنفسك، وحوّل مقاس الشرائح إلى 16:9.</p>'
-    + '<ul><li>خلفية داكنة ونص أبيض، والأزرق يصير أصفر</li><li>خط UULA Sans Medium بحجم 36 والعناوين 48</li><li>حذف رقم الصفحة ورمز QR والبطاقات الفاتحة</li><li>تصغير الخط تلقائيًا عند الامتلاء</li></ul>'
+  modal(T('about'), T('aboutHtml')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 
@@ -382,26 +417,29 @@ $('aboutBtn').addEventListener('click', () => {
   const note = m => { if (busy) return; say(m); setTimeout(() => { if (status.textContent === m) say(''); }, 5000); };
   async function check(manual) {
     last = Date.now(); const t = await head();
-    if (!base) { base = t; if (manual) note(t ? 'لديك آخر إصدار.' : 'تعذّر الاتصال.'); return; }
-    if (t && t !== base) { $('updBtn').hidden = false; if (manual) note('يوجد تحديث.'); }
-    else if (manual) note(t ? 'لديك آخر إصدار.' : 'تعذّر الاتصال.');
+    if (!base) { base = t; if (manual) note(t ? T('latest') : T('noConn')); return; }
+    if (t && t !== base) { $('updBtn').hidden = false; if (manual) note(T('hasUpd')); }
+    else if (manual) note(t ? T('latest') : T('noConn'));
   }
   head().then(t => { base = t; });
   setInterval(() => check(false), 60 * 60 * 1000);
   const soon = () => { if (Date.now() - last > 60 * 60 * 1000) check(false); };
-  window.addEventListener('focus', soon); document.addEventListener('visibilitychange', () => { if (!document.hidden) soon(); });
+  window.addEventListener('focus', () => { soon(); if (!$('pageTitle').hidden) refreshSel(); }); document.addEventListener('visibilitychange', () => { if (!document.hidden) soon(); });
   $('updBtn').addEventListener('click', () => { if (!busy) location.replace('app.html?v=' + Date.now()); });
   $('chkUpd').addEventListener('click', () => { menu(false); check(true); });
 })();
 
 // ---------- start ----------
+I18N.apply();
 $('appVer').textContent = VER;
 refreshLock();
 const ready = (window.Office && Office.onReady) ? Office.onReady() : Promise.resolve({});
 ready.then(info => {
-  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say('هذه الأداة تعمل داخل PowerPoint فقط.'); return; }
-  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say('حدّث برنامج PowerPoint لاستخدام الأداة.'); return; }
+  if (!window.PowerPoint || (info && info.host && info.host !== Office.HostType.PowerPoint)) { say(T('onlyPpt')); return; }
+  if (!Office.context.requirements.isSetSupported('PowerPointApi', '1.8')) { say(T('needNew')); return; }
   supported = true;
+  try { Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, () => { if (!$('pageTitle').hidden) refreshSel(); }); } catch (e) {}
+  refreshSel();
   const s = docSettings(); step1 = !!(s && s.get('udStep1')); $('s1Done').checked = step1;
   step2 = !!(s && s.get('udStep2')); $('s2Done').checked = step2;
   refreshLock();
