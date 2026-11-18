@@ -71,6 +71,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
 .mbox .foot{text-align:center;color:var(--muted);font-size:.8rem;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+
+.seg4{grid-template-columns:repeat(4,1fr)}.seg4 button{font-size:.78rem}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.thumbs button{padding:0;border:2px solid transparent;border-radius:7px;overflow:hidden;cursor:pointer;background:#000;aspect-ratio:16/9}
+.thumbs button img{display:block;width:100%;height:100%;object-fit:cover}
+.thumbs button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.tin{font:inherit;font-size:.88rem;height:32px;border:1px solid var(--line);border-radius:7px;padding:0 9px;background:var(--panel);color:var(--ink)}
+.tin:focus{outline:none;border-color:var(--accent)}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -140,6 +148,21 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <div class="res" id="res"></div>
   </section>
 
+
+  <section class="panel" id="titlePanel">
+    <span class="label">شريحة العنوان</span>
+    <div class="seg seg4" id="tType">
+      <button type="button" data-v="explain" aria-pressed="true">الشرح</button>
+      <button type="button" data-v="better" aria-pressed="false">الزبدة</button>
+      <button type="button" data-v="bank" aria-pressed="false">بنك الأسئلة</button>
+      <button type="button" data-v="practice" aria-pressed="false">التدريبات</button>
+    </div>
+    <div class="thumbs" id="tThumbs"></div>
+    <input type="text" class="tin" id="tTitle" placeholder="عنوان الفيديو" dir="rtl">
+    <input type="text" class="tin" id="tSub" placeholder="العنوان الثانوي (اختياري)" dir="rtl">
+    <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span>إدراج شريحة العنوان<small>بعد الشريحة المحددة</small></span></button>
+    <div class="status" id="tStatus"></div>
+  </section>
   <section class="panel">
     <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
     <div id="setBody" hidden style="display:grid;gap:8px">
@@ -774,11 +797,12 @@ async function insertAfter(b64, afterId) {
   const ids = await allIds();
   return ids[ids.indexOf(afterId) + 1];
 }
-async function isDarkDone(id) {
+async function slideMark(id) {
   return run(async ctx => {
     const t = ctx.presentation.slides.getItem(id).tags; t.load('items/key,items/value'); await ctx.sync();
-    return t.items.some(x => x.key.toUpperCase() === 'UULADARK');
-  }).catch(() => false);
+    const keys = t.items.map(x => x.key.toUpperCase());
+    return keys.includes('UULATITLE') ? 'title' : keys.includes('UULADARK') ? 'dark' : null;
+  }).catch(() => null);
 }
 async function markDark(id) { return run(async ctx => { ctx.presentation.slides.getItem(id).tags.add('UULADARK', VER); await ctx.sync(); }).catch(() => {}); }
 
@@ -824,14 +848,16 @@ const SKIPS = [[], ['layout'], ['images'], ['tables'], ['shapes'], ['text'], ['l
 const SKIP_AR = { layout: 'الترتيب', images: 'تلوين الصور', tables: 'الجداول', shapes: 'الأشكال', text: 'النصوص' };
 async function doDark(ids) {
   const done = [], small = [], over = [], gray = [], skipped = [], errs = [];
-  let srcCount = 0; const fallbacks = [];
+  let srcCount = 0; const fallbacks = [], titles = [];
   const ctxBase = { bg: st.bg.slice(1).toUpperCase(), text: st.text.slice(1).toUpperCase(), accent: st.accent.slice(1).toUpperCase(), title: '4800', font: 'UULA Sans Medium', images: st.images };
   for (let k = 0; k < ids.length; k++) {
     prog(k / ids.length); say('تحويل الشريحة ' + (k + 1) + ' من ' + ids.length + '…');
     const id = ids[k];
     let stage = 'قراءة الشريحة', origB64 = null;
     try {
-      if (await isDarkDone(id)) { skipped.push(id); continue; }
+      const mark = await slideMark(id);
+      if (mark === 'title') { titles.push(id); continue; }
+      if (mark === 'dark') { skipped.push(id); continue; }
       origB64 = await exportSlide(id);
       const pkg = await UD.openPackage(origB64);
       const slideHpt = pkg.slideH / PT;
@@ -885,6 +911,7 @@ async function doDark(ids) {
   if (over.length) line('err', '• ممتلئة، قسّمها يدويًا: ' + slideLinks(over, over.map(num)));
   if (gray.length) line('warn', '• صور فقدت ألوانها: ' + slideLinks(gray, gray.map(num)));
   if (skipped.length) line('warn', '• محوّلة سابقًا: ' + cnt(skipped.length));
+  if (titles.length) line('', '<span class="note">تُركت شرائح العنوان كما هي: ' + cnt(titles.length) + '</span>');
   fallbacks.forEach(([sk, i]) => { if (i) line('warn', '• شريحة <a data-id="' + i + '">' + num(i) + '</a> حُوّلت بدون: ' + sk.map(k => SKIP_AR[k]).join('، ')); });
   errs.forEach(m => line('err', '✗ ' + esc(m)));
   if (done.length) line('', '<span class="note">يلزم تثبيت خط UULA Sans Medium على الجهاز.</span>');
@@ -949,6 +976,59 @@ $('addSep').addEventListener('click', async () => {
 // step 2: the user changes the slide size himself and ticks the box
 function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings(); if (s) { s.set('udStep2', v); s.saveAsync(); } refreshLock(); }
 $('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
+
+
+// ---------- title slide (UULA video template) ----------
+let tType = load('ud-ttype', 'explain'), tVar = load('ud-tvar', 1);
+function paintTitle() {
+  $('tType').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === tType)));
+  const box = $('tThumbs'); box.innerHTML = '';
+  for (let k = 1; k <= 3; k++) {
+    const b = document.createElement('button'); b.type = 'button'; b.title = 'نمط ' + k;
+    b.setAttribute('aria-pressed', String(k === tVar));
+    const im = document.createElement('img'); im.src = 'templates/title-' + tType + '-' + k + '.jpg'; im.alt = '';
+    b.appendChild(im); b.addEventListener('click', () => { tVar = k; save('ud-tvar', k); paintTitle(); });
+    box.appendChild(b);
+  }
+}
+$('tType').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tType = b.dataset.v; save('ud-ttype', tType); paintTitle(); });
+paintTitle();
+const b64of = buf => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+function fillPlaceholder(doc, idx, text) {
+  const sp = [...doc.getElementsByTagNameNS(UD.NS.p, 'sp')].find(e => { const ph = e.getElementsByTagNameNS(UD.NS.p, 'ph')[0]; return ph && ph.getAttribute('idx') === String(idx); });
+  if (!sp || !text) return;
+  const tx = sp.getElementsByTagNameNS(UD.NS.p, 'txBody')[0];
+  for (const p of [...tx.getElementsByTagNameNS(UD.NS.a, 'p')]) tx.removeChild(p);
+  const P = UD.NS.a, p = doc.createElementNS(P, 'a:p'), r = doc.createElementNS(P, 'a:r'), rp = doc.createElementNS(P, 'a:rPr'), t = doc.createElementNS(P, 'a:t');
+  rp.setAttribute('lang', 'ar-SA'); t.textContent = text; r.appendChild(rp); r.appendChild(t); p.appendChild(r); tx.appendChild(p);
+}
+const tSay = m => { $('tStatus').textContent = m || ''; };
+$('tInsert').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  busy = true; refreshLock(); $('tInsert').disabled = true; tSay('جارٍ الإدراج…');
+  try {
+    const r = await fetch('templates/title-' + tType + '-' + tVar + '.pptx', { cache: 'no-cache' });
+    if (!r.ok) throw new Error('تعذّر تحميل القالب');
+    const pkg = await UD.openPackage(b64of(await r.arrayBuffer()));
+    const doc = UD.parseXml(pkg.files.slide);
+    fillPlaceholder(doc, 10, $('tTitle').value.trim());
+    fillPlaceholder(doc, 11, $('tSub').value.trim());
+    const b64 = await UD.buildPackage(pkg, UD.serialize(doc));
+    await run(async ctx => {
+      const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id');
+      const all = ctx.presentation.slides; all.load('items/id'); await ctx.sync();
+      const opts = { formatting: 'KeepSourceFormatting' };
+      if (sel.items.length) opts.targetSlideId = sel.items[sel.items.length - 1].id;
+      ctx.presentation.insertSlidesFromBase64(b64, opts); await ctx.sync();
+      const after = ctx.presentation.slides; after.load('items/id'); await ctx.sync();
+      const before = new Set(all.items.map(x => x.id));
+      const added = after.items.find(x => !before.has(x.id));
+      if (added) { added.tags.add('UULATITLE', '1'); await ctx.sync(); try { ctx.presentation.setSelectedSlides([added.id]); await ctx.sync(); } catch (e) {} }
+    });
+    tSay('✓ تم إدراج شريحة العنوان.');
+  } catch (e) { tSay('تعذّر الإدراج: ' + errText(e)); }
+  finally { busy = false; $('tInsert').disabled = false; refreshLock(); }
+});
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope2', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }

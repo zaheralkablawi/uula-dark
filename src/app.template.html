@@ -71,6 +71,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .mbox{background:var(--panel);border-radius:12px;max-width:420px;width:100%;max-height:80vh;overflow:auto;padding:14px 16px;box-shadow:0 16px 40px rgb(0 0 0 / .3)}
 .mbox h3{margin:0 0 8px;font-size:1rem}.mbox p{margin:6px 0}.mbox ul{margin:6px 0;padding-inline-start:1.2em}
 .mbox .foot{text-align:center;color:var(--muted);font-size:.8rem;margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+
+.seg4{grid-template-columns:repeat(4,1fr)}.seg4 button{font-size:.78rem}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.thumbs button{padding:0;border:2px solid transparent;border-radius:7px;overflow:hidden;cursor:pointer;background:#000;aspect-ratio:16/9}
+.thumbs button img{display:block;width:100%;height:100%;object-fit:cover}
+.thumbs button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.tin{font:inherit;font-size:.88rem;height:32px;border:1px solid var(--line);border-radius:7px;padding:0 9px;background:var(--panel);color:var(--ink)}
+.tin:focus{outline:none;border-color:var(--accent)}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -140,6 +148,21 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <div class="res" id="res"></div>
   </section>
 
+
+  <section class="panel" id="titlePanel">
+    <span class="label">شريحة العنوان</span>
+    <div class="seg seg4" id="tType">
+      <button type="button" data-v="explain" aria-pressed="true">الشرح</button>
+      <button type="button" data-v="better" aria-pressed="false">الزبدة</button>
+      <button type="button" data-v="bank" aria-pressed="false">بنك الأسئلة</button>
+      <button type="button" data-v="practice" aria-pressed="false">التدريبات</button>
+    </div>
+    <div class="thumbs" id="tThumbs"></div>
+    <input type="text" class="tin" id="tTitle" placeholder="عنوان الفيديو" dir="rtl">
+    <input type="text" class="tin" id="tSub" placeholder="العنوان الثانوي (اختياري)" dir="rtl">
+    <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span>إدراج شريحة العنوان<small>بعد الشريحة المحددة</small></span></button>
+    <div class="status" id="tStatus"></div>
+  </section>
   <section class="panel">
     <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
     <div id="setBody" hidden style="display:grid;gap:8px">
