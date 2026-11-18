@@ -271,10 +271,29 @@ function fillPlaceholder(doc, idx, text, layout, scheme) {
       }
     }
   }
-  if (!text) return;
+  if (!text) return null;
   for (const p of [...tx.getElementsByTagNameNS(A, 'p')]) tx.removeChild(p);
   const p = doc.createElementNS(A, 'a:p'), r = doc.createElementNS(A, 'a:r'), rp = doc.createElementNS(A, 'a:rPr'), t = doc.createElementNS(A, 'a:t');
+  // the style is also written on the paragraph and on the text itself (PowerPoint keeps these in every case)
+  const lvl = [...tx.getElementsByTagNameNS(A, 'lvl1pPr')][0];
+  const spec = { size: 0, bold: false, color: null, font: null, align: 'Center' };
+  if (lvl) {
+    const pPr = doc.createElementNS(A, 'a:pPr');
+    for (const at of [...lvl.attributes]) pPr.setAttribute(at.name, at.value);
+    for (const c of [...lvl.children]) if (c.localName !== 'defRPr') pPr.appendChild(c.cloneNode(true));
+    p.appendChild(pPr);
+    const al = lvl.getAttribute('algn'); spec.align = al === 'r' ? 'Right' : al === 'l' ? 'Left' : al === 'just' ? 'Justify' : 'Center';
+    const d = [...lvl.children].find(c => c.localName === 'defRPr');
+    if (d) {
+      for (const at of [...d.attributes]) rp.setAttribute(at.name, at.value);
+      for (const c of [...d.children]) rp.appendChild(c.cloneNode(true));
+      spec.size = +(d.getAttribute('sz') || 0) / 100; spec.bold = d.getAttribute('b') === '1';
+      const clr = d.getElementsByTagNameNS(A, 'srgbClr')[0]; if (clr) spec.color = '#' + clr.getAttribute('val');
+      const lat = d.getElementsByTagNameNS(A, 'latin')[0]; if (lat) spec.font = lat.getAttribute('typeface');
+    }
+  }
   rp.setAttribute('lang', 'ar-SA'); t.textContent = text; r.appendChild(rp); r.appendChild(t); p.appendChild(r); tx.appendChild(p);
+  return spec;
 }
 const tSay = m => { $('tStatus').textContent = m || ''; };
 let tPos = load('ud-tpos', 'start'), hasSel = false;
@@ -308,8 +327,7 @@ $('tInsert').addEventListener('click', async () => {
     const pkg = await UD.openPackage(b64of(await r.arrayBuffer()));
     const doc = UD.parseXml(pkg.files.slide);
     const scheme = UD.readTheme(pkg.files);
-    fillPlaceholder(doc, 10, $('tTitle').value.trim(), pkg.layouts[0], scheme);
-    fillPlaceholder(doc, 11, $('tSub').value.trim(), pkg.layouts[0], scheme);
+    const specs = [fillPlaceholder(doc, 10, $('tTitle').value.trim(), pkg.layouts[0], scheme), fillPlaceholder(doc, 11, $('tSub').value.trim(), pkg.layouts[0], scheme)];
     const b64 = await UD.buildPackage(pkg, UD.serialize(doc));
     await run(async ctx => {
       const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id');
@@ -326,7 +344,22 @@ $('tInsert').addEventListener('click', async () => {
       const after = ctx.presentation.slides; after.load('items/id'); await ctx.sync();
       const before = new Set(all.items.map(x => x.id));
       const added = after.items.find(x => !before.has(x.id));
-      if (added) { added.tags.add('UULATITLE', '1'); await ctx.sync(); try { ctx.presentation.setSelectedSlides([added.id]); await ctx.sync(); } catch (e) {} }
+      if (added) {
+        added.tags.add('UULATITLE', '1'); await ctx.sync();
+        // last safety net: apply the template's text style through PowerPoint itself
+        try {
+          const sh = ctx.presentation.slides.getItem(added.id).shapes; sh.load('items/name'); await ctx.sync();
+          const ph = sh.items.filter(x => /^Text Placeholder/.test(x.name));
+          ph.forEach((x, k) => {
+            const sp = specs[k]; if (!sp) return;
+            const f = x.textFrame.textRange.font;
+            if (sp.size) f.size = sp.size; if (sp.color) f.color = sp.color; if (sp.font) f.name = sp.font; f.bold = sp.bold;
+            x.textFrame.textRange.paragraphFormat.horizontalAlignment = sp.align;
+          });
+          await ctx.sync();
+        } catch (e) {}
+        try { ctx.presentation.setSelectedSlides([added.id]); await ctx.sync(); } catch (e) {}
+      }
     });
     tSay(T('inserted'));
   } catch (e) { tSay(T('insertFail') + errText(e)); }
