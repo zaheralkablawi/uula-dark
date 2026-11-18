@@ -276,7 +276,9 @@ function fillPlaceholder(doc, idx, text, layout, scheme) {
   const p = doc.createElementNS(A, 'a:p'), r = doc.createElementNS(A, 'a:r'), rp = doc.createElementNS(A, 'a:rPr'), t = doc.createElementNS(A, 'a:t');
   // the style is also written on the paragraph and on the text itself (PowerPoint keeps these in every case)
   const lvl = [...tx.getElementsByTagNameNS(A, 'lvl1pPr')][0];
-  const spec = { size: 0, bold: false, color: null, font: null, align: 'Center' };
+  const spec = { size: 0, bold: false, color: null, font: null, align: 'Center', boxW: 0 };
+  const lxf = lsp && lsp.getElementsByTagNameNS(A, 'xfrm')[0], lext = lxf && lxf.getElementsByTagNameNS(A, 'ext')[0];
+  if (lext) spec.boxW = +lext.getAttribute('cx') / 12700;
   if (lvl) {
     const pPr = doc.createElementNS(A, 'a:pPr');
     for (const at of [...lvl.attributes]) pPr.setAttribute(at.name, at.value);
@@ -348,12 +350,14 @@ $('tInsert').addEventListener('click', async () => {
         added.tags.add('UULATITLE', '1'); await ctx.sync();
         // last safety net: apply the template's text style through PowerPoint itself
         try {
-          const sh = ctx.presentation.slides.getItem(added.id).shapes; sh.load('items/name'); await ctx.sync();
+          const sh = ctx.presentation.slides.getItem(added.id).shapes; sh.load('items/name,items/width'); await ctx.sync();
           const ph = sh.items.filter(x => /^Text Placeholder/.test(x.name));
           ph.forEach((x, k) => {
             const sp = specs[k]; if (!sp) return;
             const f = x.textFrame.textRange.font;
-            if (sp.size) f.size = sp.size; if (sp.color) f.color = sp.color; if (sp.font) f.name = sp.font; f.bold = sp.bold;
+            // the template is 960 pt wide: on a bigger slide the text grows with its box, so it looks the same
+            const scale = sp.boxW && x.width ? x.width / sp.boxW : 1;
+            if (sp.size) f.size = Math.round(sp.size * (scale > 0.3 && scale < 4 ? scale : 1)); if (sp.color) f.color = sp.color; if (sp.font) f.name = sp.font; f.bold = sp.bold;
             x.textFrame.textRange.paragraphFormat.horizontalAlignment = sp.align;
           });
           await ctx.sync();
