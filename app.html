@@ -79,6 +79,11 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .thumbs button[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
 .tin{font:inherit;font-size:.88rem;height:32px;border:1px solid var(--line);border-radius:7px;padding:0 9px;background:var(--panel);color:var(--ink)}
 .tin:focus{outline:none;border-color:var(--accent)}
+
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:#e6eaf0;border-radius:10px;padding:3px;gap:3px}
+.tabs button{font:inherit;font-size:.86rem;font-weight:600;height:32px;border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--panel);color:var(--accent);box-shadow:0 1px 3px rgb(0 0 0 / .12)}
+.tabpage{display:grid;gap:10px}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -111,6 +116,11 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
       </div>
     </div>
   </header>
+  <div class="tabs" id="tabs" role="tablist">
+    <button type="button" role="tab" data-t="dark" aria-selected="true">التحويل إلى الداكن</button>
+    <button type="button" role="tab" data-t="title" aria-selected="false">شريحة العنوان</button>
+  </div>
+  <div class="tabpage" id="pageDark">
 
   <section class="panel">
     <span class="label">قبل التحويل: خطوتان تقوم بهما أنت</span>
@@ -149,9 +159,20 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
   </section>
 
 
+  <section class="panel">
+    <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
+    <div id="setBody" hidden style="display:grid;gap:8px">
+      <div class="row"><span>لون الخلفية</span><span class="cwrap"><button type="button" class="colorbtn" data-k="bg"><span class="sw"></span></button></span></div>
+      <div class="row"><span>لون النص</span><span class="cwrap"><button type="button" class="colorbtn" data-k="text"><span class="sw"></span></button></span></div>
+      <div class="row"><span>الأزرق يصير</span><span class="cwrap"><button type="button" class="colorbtn" data-k="accent"><span class="sw"></span></button></span></div>
+      <label class="chk"><input type="checkbox" id="imgChk" checked> تلوين الصور الكبيرة بالأبيض</label>
+      <div class="row"><span class="note">الخط: UULA Sans Medium</span><button type="button" class="mini" id="resetBtn">استعادة الافتراضي</button></div>
+    </div>
+  </section>
+  </div>
+  <div class="tabpage" id="pageTitle" hidden>
   <section class="panel" id="titlePanel">
-    <span class="label">شريحة العنوان</span>
-    <div class="seg seg4" id="tType">
+        <div class="seg seg4" id="tType">
       <button type="button" data-v="explain" aria-pressed="true">الشرح</button>
       <button type="button" data-v="better" aria-pressed="false">الزبدة</button>
       <button type="button" data-v="bank" aria-pressed="false">بنك الأسئلة</button>
@@ -163,16 +184,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span>إدراج شريحة العنوان<small>بعد الشريحة المحددة</small></span></button>
     <div class="status" id="tStatus"></div>
   </section>
-  <section class="panel">
-    <button type="button" class="tog" id="setTog" aria-expanded="false"><svg viewBox="0 0 12 12" width="10" height="10"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>الإعدادات</button>
-    <div id="setBody" hidden style="display:grid;gap:8px">
-      <div class="row"><span>لون الخلفية</span><span class="cwrap"><button type="button" class="colorbtn" data-k="bg"><span class="sw"></span></button></span></div>
-      <div class="row"><span>لون النص</span><span class="cwrap"><button type="button" class="colorbtn" data-k="text"><span class="sw"></span></button></span></div>
-      <div class="row"><span>الأزرق يصير</span><span class="cwrap"><button type="button" class="colorbtn" data-k="accent"><span class="sw"></span></button></span></div>
-      <label class="chk"><input type="checkbox" id="imgChk" checked> تلوين الصور الكبيرة بالأبيض</label>
-      <div class="row"><span class="note">الخط: UULA Sans Medium</span><button type="button" class="mini" id="resetBtn">استعادة الافتراضي</button></div>
-    </div>
-  </section>
+  </div>
   <div class="cpop" id="cpop" hidden></div><input type="color" id="custom" class="vh" tabindex="-1" aria-hidden="true">
   <div class="modal" id="modal" hidden><div class="mbox" role="dialog" aria-modal="true"><h3 id="modalT"></h3><div id="modalB"></div><button type="button" class="mini" id="modalX" style="margin-top:10px">إغلاق</button></div></div>
   <footer class="credit" dir="ltr">By Zaher Alkablawi <span id="appVer">1.0</span></footer>
@@ -1029,6 +1041,15 @@ $('tInsert').addEventListener('click', async () => {
   } catch (e) { tSay('تعذّر الإدراج: ' + errText(e)); }
   finally { busy = false; $('tInsert').disabled = false; refreshLock(); }
 });
+
+// ---------- two menus: dark conversion / title slide ----------
+function setTab(t) {
+  save('ud-tab', t);
+  $('tabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
+  $('pageDark').hidden = t !== 'dark'; $('pageTitle').hidden = t !== 'title';
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
+setTab(load('ud-tab', 'dark'));
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope2', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }

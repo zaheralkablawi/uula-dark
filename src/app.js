@@ -279,6 +279,15 @@ $('tInsert').addEventListener('click', async () => {
   finally { busy = false; $('tInsert').disabled = false; refreshLock(); }
 });
 
+// ---------- two menus: dark conversion / title slide ----------
+function setTab(t) {
+  save('ud-tab', t);
+  $('tabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.t === t)));
+  $('pageDark').hidden = t !== 'dark'; $('pageTitle').hidden = t !== 'title';
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
+setTab(load('ud-tab', 'dark'));
+
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope2', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
 $('scope').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScope(b.dataset.v); });
