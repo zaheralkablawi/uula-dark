@@ -228,6 +228,77 @@ function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings
 $('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
 
 
+
+// ---------- step 1 tools: suggested separators, own parts ----------
+const s1Say = m => { $('s1Status').textContent = m || ''; };
+const PART_RE = /^UULA جزء (\d+)\s*·?\s*/;
+async function addBar(ctx, slide, x, y, w, name) {
+  const ln = slide.shapes.addGeometricShape(PowerPoint.GeometricShapeType.rectangle, { left: x, top: y - 1.5, width: w, height: 3 });
+  ln.name = name; ln.fill.setSolidColor('#FF0000'); ln.lineFormat.visible = false;
+  return ln;
+}
+$('suggestSep').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  busy = true; refreshLock(); s1Say('');
+  let bars = 0, slidesWith = 0, skipped = 0;
+  try {
+    const ids = await targetIds();
+    for (let k = 0; k < ids.length; k++) {
+      s1Say(T('suggesting', k + 1, ids.length));
+      const pkg = await UD.openPackage(await exportSlide(ids[k]));
+      const items = UD.analyze(UD.parseXml(pkg.files.slide), pkg, { scheme: UD.readTheme(pkg.files) });
+      // the user's own separators or parts are left alone; earlier suggestions are replaced
+      const own = items.some(t => t.part || (t.kind === 'sep' && !/تلقائي/.test(t.name)));
+      if (own) { skipped++; continue; }
+      const cuts = UD.suggestCuts(items.filter(t => t.kind !== 'sep'), pkg);
+      await run(async ctx => {
+        const slide = ctx.presentation.slides.getItem(ids[k]);
+        slide.shapes.load('items/name'); await ctx.sync();
+        slide.shapes.items.filter(x => /^UULA فاصل تلقائي/.test(x.name)).forEach(x => x.delete());
+        for (const c of cuts) await addBar(ctx, slide, c.x / PT, c.y / PT, c.w / PT, 'UULA فاصل تلقائي');
+        await ctx.sync();
+      });
+      if (cuts.length) { bars += cuts.length; slidesWith++; }
+    }
+    s1Say((bars ? T('suggested', bars, slidesWith) : T('suggestedNone')) + (skipped ? T('suggestSkip', skipped) : ''));
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+  finally { busy = false; refreshLock(); }
+});
+$('makePart').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  try {
+    await run(async ctx => {
+      const sel = ctx.presentation.getSelectedShapes(); sel.load('items/id,items/name');
+      const ss = ctx.presentation.getSelectedSlides(); ss.load('items/id'); await ctx.sync();
+      if (!sel.items.length || !ss.items.length) { s1Say(T('partNeedSel')); return; }
+      const all = ctx.presentation.slides.getItem(ss.items[0].id).shapes; all.load('items/id,items/name'); await ctx.sync();
+      const chosen = new Set(sel.items.map(x => x.id));
+      let max = 0;
+      for (const x of all.items) { const m = PART_RE.exec(x.name || ''); if (m && !chosen.has(x.id)) max = Math.max(max, +m[1]); }
+      const n = max + 1;
+      for (const x of sel.items) x.name = 'UULA جزء ' + n + ' · ' + (x.name || '').replace(PART_RE, '');
+      await ctx.sync();
+      s1Say(T('partDone', n, sel.items.length));
+    });
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+});
+$('clearParts').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  try {
+    const ids = await targetIds(); let n = 0;
+    await run(async ctx => {
+      for (const id of ids) {
+        const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync();
+        let hit = false;
+        for (const x of sh.items) if (PART_RE.test(x.name || '')) { x.name = x.name.replace(PART_RE, '') || 'Shape'; hit = true; }
+        if (hit) n++;
+      }
+      await ctx.sync();
+    });
+    s1Say(T('partsCleared', n));
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+});
+
 // ---------- title slide (UULA video template) ----------
 let tType = load('ud-ttype', 'explain'), tVar = load('ud-tvar', 1);
 function paintTitle() {
@@ -375,7 +446,7 @@ $('tInsert').addEventListener('click', async () => {
 // ---------- language ----------
 function setLang(l) {
   I18N.set(l); paintTitle(); paintPos(); refreshLock(); closeColors();
-  if (!busy) { say(''); tSay(''); res.innerHTML = ''; }
+  if (!busy) { say(''); tSay(''); s1Say(''); res.innerHTML = ''; }
 }
 $('langBtn').addEventListener('click', () => setLang(I18N.lang === 'ar' ? 'en' : 'ar'));
 $('langItem').addEventListener('click', () => { menu(false); setLang(I18N.lang === 'ar' ? 'en' : 'ar'); });

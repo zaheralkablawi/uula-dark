@@ -257,6 +257,7 @@ function analyze(doc, pkg, ctx) {
     const nv = c.firstElementChild, cnv = nv && kid(nv, 'cNvPr', 'p');
     it.name = cnv ? cnv.getAttribute('name') || '' : '';
     it.hidden = !!cnv && /^(1|true)$/.test(cnv.getAttribute('hidden') || '');
+    const pm = /^UULA جزء (\d+)/.exec(it.name); it.part = pm ? +pm[1] : 0;
     it.text = text;
     // separator added by the add-in's button
     if (/^UULA فاصل/.test(it.name)) { it.kind = 'sep'; it.drop = 'sep'; return it; }
@@ -283,8 +284,17 @@ function analyze(doc, pkg, ctx) {
 // ---------- split ----------
 // returns [{ids:[item index...]}] in top-to-bottom order; one entry = no separators
 function sections(items) {
-  const seps = items.filter(t => t.kind === 'sep').map(t => t.g.y + t.g.h / 2).sort((a, b) => a - b);
   const keep = items.filter(t => !t.drop);
+  // parts chosen by selection ("جزء مستقل") come first; anything not in a part goes on one more slide at the end
+  if (keep.some(t => t.part)) {
+    const nums = [...new Set(keep.filter(t => t.part).map(t => t.part))].sort((a, b) => a - b);
+    const parts = nums.map(n => keep.filter(t => t.part === n).map(t => t.i));
+    const rest = keep.filter(t => !t.part);
+    if (rest.some(t => !t.hidden)) parts.push(rest.map(t => t.i));
+    else if (rest.length) parts[parts.length - 1].push(...rest.map(t => t.i));
+    return { count: parts.length > 1 ? parts.length - 1 : 0, parts, byPart: true };
+  }
+  const seps = items.filter(t => t.kind === 'sep').map(t => t.g.y + t.g.h / 2).sort((a, b) => a - b);
   const out = Array.from({ length: seps.length + 1 }, () => []);
   for (const t of keep) {
     const cy = t.g.y + t.g.h / 2;
@@ -292,6 +302,44 @@ function sections(items) {
     out[k].push(t.i);
   }
   return { count: seps.length, parts: out.filter(p => p.length) };
+}
+// suggested separators: horizontal gaps between the questions of a worksheet (EMU)
+const QMARK = /^(Q\b|Q(?=[\u0600-\u06FF])|[ⓐ-ⓩ]|[①-⑳]|\(?[0-9٠-٩]{1,2}\s*[\)\.\-]|مثال|تحقق|سؤال|تمرين|التمرين|أوجد|اكتب|ارسم|حل )/;
+function suggestCuts(items, pkg) {
+  const vis = items.filter(t => !t.drop && !t.hidden && t.kind !== 'sep' && t.g.h > 0 && t.g.w > 0);
+  if (vis.length < 2) return [];
+  const marked = t => /^ZAHER_QUESTION/i.test(t.name || '') || QMARK.test((t.text || '').trim());
+  const top = Math.min(...vis.map(t => t.g.y)), bottom = Math.max(...vis.map(t => t.g.y + t.g.h));
+  // a part is worth its own slide when it holds a picture/table/drawing or a real block of text
+  const worth = (y0, y1) => {
+    const inside = vis.filter(t => t.g.y + t.g.h / 2 > y0 && t.g.y + t.g.h / 2 < y1);
+    return y1 - y0 >= 60 * PT && inside.some(t => t.kind !== 'text' || t.g.h >= 40 * PT);
+  };
+  let cand;
+  const marks = vis.filter(marked).sort((a, b) => a.g.y - b.g.y);
+  if (marks.length >= 1) {
+    // cut just above every question start (only when what is above it is worth a slide)
+    cand = marks.map(m => {
+      const above = vis.filter(t => t !== m && t.g.y < m.g.y && t.g.y + t.g.h <= m.g.y + 4 * PT);
+      const end = above.length ? Math.max(...above.map(t => t.g.y + t.g.h)) : m.g.y;
+      return Math.max(Math.min(end, m.g.y) + (m.g.y - Math.min(end, m.g.y)) / 2, m.g.y - 6 * PT);
+    });
+  } else {
+    // no question marks: use the big empty bands between groups of content
+    const sorted = [...vis].sort((a, b) => a.g.y - b.g.y), bands = [];
+    for (const t of sorted) {
+      const b = bands[bands.length - 1];
+      if (b && t.g.y <= b.end + PT) b.end = Math.max(b.end, t.g.y + t.g.h); else bands.push({ y: t.g.y, end: t.g.y + t.g.h });
+    }
+    const gaps = []; for (let i = 0; i + 1 < bands.length; i++) gaps.push({ size: bands[i + 1].y - bands[i].end, mid: (bands[i].end + bands[i + 1].y) / 2 });
+    if (!gaps.length) return [];
+    const sizes = gaps.map(g => g.size).sort((a, b) => a - b), median = sizes[Math.floor(sizes.length / 2)];
+    cand = gaps.filter(g => g.size >= Math.max(14 * PT, 2.2 * median)).map(g => g.mid);
+  }
+  const out = []; let last = top;
+  for (const y of [...new Set(cand)].sort((a, b) => a - b)) if (worth(last, y) && worth(y, bottom + 1)) { out.push(y); last = y; }
+  const x0 = Math.min(...vis.map(t => t.g.x)), x1 = Math.max(...vis.map(t => t.g.x + t.g.w));
+  return out.map(y => ({ y, x: x0 - 6 * PT, w: x1 - x0 + 12 * PT }));
 }
 // a copy of the slide holding only the given items, moved up to the top margin
 function sectionXml(slideXml, pkg, ctx, ids) {
@@ -473,6 +521,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   for (const t of items) if (t.drop) { t.el.parentNode.removeChild(t.el); report.removed++; }
   const keep = items.filter(t => !t.drop);
   for (const tm of kids(doc.documentElement, 'timing', 'p')) doc.documentElement.removeChild(tm);
+  for (const cn of desc(doc, 'p', 'cNvPr')) { const n = cn.getAttribute('name') || ''; if (/^UULA جزء \d+/.test(n)) cn.setAttribute('name', n.replace(/^UULA جزء \d+\s*·?\s*/, '') || 'Shape'); }
   // background
   const cSld = kid(doc.documentElement, 'cSld', 'p');
   const oldBg = kid(cSld, 'bg', 'p'); if (oldBg) cSld.removeChild(oldBg);
@@ -610,6 +659,6 @@ function layout(keep, pkg, ctx) {
   return { mode: 'two', items, bottom: Math.max(yl, yr) - GAP };
 }
 
-return { NS, PT, MARGIN, GAP, openPackage, buildPackage, parseXml, serialize, analyze, sections, sectionXml, darkXml, readTheme, mapColor, rgb };
+return { NS, PT, MARGIN, GAP, openPackage, buildPackage, parseXml, serialize, analyze, sections, suggestCuts, sectionXml, darkXml, readTheme, mapColor, rgb };
 })();
 if (typeof module !== 'undefined') module.exports = UD;

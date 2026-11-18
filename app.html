@@ -90,6 +90,14 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .seg button:disabled{color:#b7bec9;cursor:not-allowed;background:var(--panel)}
 .langbtn{font:600 .8rem var(--f);color:var(--muted)}
 header{direction:rtl}
+
+.tools3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.tool{display:grid;justify-items:center;gap:3px;font:inherit;font-size:.74rem;font-weight:600;line-height:1.25;padding:7px 4px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);cursor:pointer;text-align:center}
+.tool svg{width:20px;height:20px;color:var(--accent)}
+.tool:hover{border-color:var(--accent);background:var(--accent-soft)}
+.tool:disabled{opacity:.5;cursor:default}
+.linkbtn{font:inherit;font-size:.74rem;border:0;background:none;color:var(--muted);text-decoration:underline;cursor:pointer;padding:0;margin-inline-start:auto}
+#s1Status:empty{display:none}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -137,10 +145,16 @@ header{direction:rtl}
       <div class="sbody">
         <b data-i18n="s1Title"></b>
         <span class="note" data-i18n="s1Note"></span>
-        <div class="srow">
-          <button type="button" class="mini" id="addSep"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 8h12"/></svg> <span data-i18n="addSep"></span></button>
-          <label class="chk"><input type="checkbox" id="s1Done"> <span data-i18n="s1Done"></span></label>
+        <div class="tools3">
+          <button type="button" class="tool" id="suggestSep"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h14"/><path d="M10 2.5l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9z"/><path d="M15 13.5l.6 1.3 1.3.6-1.3.6-.6 1.3-.6-1.3-1.3-.6 1.3-.6z"/></svg><span data-i18n="suggestSep"></span></button>
+          <button type="button" class="tool" id="addSep"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 10h14"/></svg><span data-i18n="addSep"></span></button>
+          <button type="button" class="tool" id="makePart"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2" stroke-dasharray="3 2.2"/><path d="M7.5 10.2l1.8 1.8 3.4-3.6"/></svg><span data-i18n="makePart"></span></button>
         </div>
+        <div class="srow">
+          <label class="chk"><input type="checkbox" id="s1Done"> <span data-i18n="s1Done"></span></label>
+          <button type="button" class="linkbtn" id="clearParts" data-i18n="clearParts"></button>
+        </div>
+        <div class="status" id="s1Status"></div>
       </div>
     </div>
     <div class="step" id="step2">
@@ -215,8 +229,14 @@ const I18N = (() => {
       update: 'تحديث جديد', menu: 'القائمة', chkUpd: 'التحقق من التحديثات', about: 'حول الأداة', close: 'إغلاق',
       tabDark: 'التحويل إلى الداكن', tabTitle: 'شريحة العنوان',
       stepsLabel: 'قبل التحويل: خطوتان تقوم بهما أنت', n1: '١', n2: '٢',
-      s1Title: 'أضف فواصل', s1Note: 'اضغط الزر ثم اسحب الفاصل بين كل جزأين تريد فصلهما. لا تُعتمد إلا الفواصل المضافة من هنا.',
-      addSep: 'أضف فواصل', s1Done: 'تمت إضافة الفواصل',
+      s1Title: 'قسّم الشرائح', s1Note: 'اقترح الفواصل ثم راجعها، أو أضف فاصلًا بنفسك، أو حدّد عناصر واضغط «جزء مستقل». لا تُعتمد إلا الفواصل والأجزاء المضافة من هنا.',
+      suggestSep: 'اقترح الفواصل', addSep: 'أضف فاصلًا', makePart: 'جزء مستقل', clearParts: 'إلغاء الأجزاء', s1Done: 'تم تقسيم الشرائح',
+      suggesting: (k, n) => 'فحص الشريحة ' + k + ' من ' + n + '…',
+      suggested: (b, sl) => '✓ أُضيف ' + (b === 1 ? 'فاصل واحد' : b === 2 ? 'فاصلان' : b + (b <= 10 ? ' فواصل' : ' فاصلًا')) + ' في ' + cntAr(sl) + '. راجعها قبل التحويل.',
+      suggestedNone: 'لم أجد أماكن واضحة للفواصل. أضفها بنفسك أو استخدم «جزء مستقل».',
+      suggestSkip: n => ' تُركت ' + cntAr(n) + ' فيها فواصل أو أجزاء من قبل.',
+      partNeedSel: 'حدّد عناصر في شريحة واحدة أولًا.', partDone: (p, k) => '✓ جزء ' + p + ': ' + (k === 1 ? 'عنصر واحد' : k === 2 ? 'عنصران' : k + ' عناصر') + '. حدّد عناصر الجزء التالي ثم اضغط مرة أخرى.',
+      partsCleared: n => '✓ أُلغيت الأجزاء في ' + cntAr(n) + '.',
       s2Title: 'حوّل مقاس الشرائح إلى 16:9', s2Note: 'من تبويب تصميم ← حجم الشريحة ← شاشة عريضة (16:9).', s2Done: 'تم تحويل المقاس',
       darkHead: 'التحويل إلى الوضع الداكن', scopeSel: 'الشرائح المحددة', scopeAll: 'كل الشرائح', convert: 'تحويل',
       lockBoth: 'أكمل الخطوتين ١ و٢ أولًا.', lockOne: k => 'أكمل الخطوة ' + (k === 1 ? '١' : '٢') + ' أولًا.',
@@ -249,8 +269,14 @@ const I18N = (() => {
       update: 'New update', menu: 'Menu', chkUpd: 'Check for updates', about: 'About', close: 'Close',
       tabDark: 'Dark conversion', tabTitle: 'Title slide',
       stepsLabel: 'Before converting: two steps you do yourself', n1: '1', n2: '2',
-      s1Title: 'Add separators', s1Note: 'Press the button, then drag the separator between every two parts you want on separate slides. Only separators added here count.',
-      addSep: 'Add separator', s1Done: 'Separators added',
+      s1Title: 'Split the slides', s1Note: 'Suggest separators and review them, add one yourself, or select objects and press “Own part”. Only separators and parts added here count.',
+      suggestSep: 'Suggest separators', addSep: 'Add separator', makePart: 'Own part', clearParts: 'Clear parts', s1Done: 'Slides split',
+      suggesting: (k, n) => 'Checking slide ' + k + ' of ' + n + '…',
+      suggested: (b, sl) => '✓ Added ' + b + (b === 1 ? ' separator' : ' separators') + ' on ' + cntEn(sl) + '. Review them before converting.',
+      suggestedNone: 'No clear places for separators. Add them yourself or use “Own part”.',
+      suggestSkip: n => ' Skipped ' + cntEn(n) + ' that already have separators or parts.',
+      partNeedSel: 'Select objects on one slide first.', partDone: (p, k) => '✓ Part ' + p + ': ' + k + (k === 1 ? ' object' : ' objects') + '. Select the next part and press again.',
+      partsCleared: n => '✓ Parts cleared on ' + cntEn(n) + '.',
       s2Title: 'Change the slide size to 16:9', s2Note: 'Design tab → Slide Size → Widescreen (16:9).', s2Done: 'Slide size changed',
       darkHead: 'Convert to dark mode', scopeSel: 'Selected slides', scopeAll: 'All slides', convert: 'Convert',
       lockBoth: 'Finish steps 1 and 2 first.', lockOne: k => 'Finish step ' + k + ' first.',
@@ -567,6 +593,7 @@ function analyze(doc, pkg, ctx) {
     const nv = c.firstElementChild, cnv = nv && kid(nv, 'cNvPr', 'p');
     it.name = cnv ? cnv.getAttribute('name') || '' : '';
     it.hidden = !!cnv && /^(1|true)$/.test(cnv.getAttribute('hidden') || '');
+    const pm = /^UULA جزء (\d+)/.exec(it.name); it.part = pm ? +pm[1] : 0;
     it.text = text;
     // separator added by the add-in's button
     if (/^UULA فاصل/.test(it.name)) { it.kind = 'sep'; it.drop = 'sep'; return it; }
@@ -593,8 +620,17 @@ function analyze(doc, pkg, ctx) {
 // ---------- split ----------
 // returns [{ids:[item index...]}] in top-to-bottom order; one entry = no separators
 function sections(items) {
-  const seps = items.filter(t => t.kind === 'sep').map(t => t.g.y + t.g.h / 2).sort((a, b) => a - b);
   const keep = items.filter(t => !t.drop);
+  // parts chosen by selection ("جزء مستقل") come first; anything not in a part goes on one more slide at the end
+  if (keep.some(t => t.part)) {
+    const nums = [...new Set(keep.filter(t => t.part).map(t => t.part))].sort((a, b) => a - b);
+    const parts = nums.map(n => keep.filter(t => t.part === n).map(t => t.i));
+    const rest = keep.filter(t => !t.part);
+    if (rest.some(t => !t.hidden)) parts.push(rest.map(t => t.i));
+    else if (rest.length) parts[parts.length - 1].push(...rest.map(t => t.i));
+    return { count: parts.length > 1 ? parts.length - 1 : 0, parts, byPart: true };
+  }
+  const seps = items.filter(t => t.kind === 'sep').map(t => t.g.y + t.g.h / 2).sort((a, b) => a - b);
   const out = Array.from({ length: seps.length + 1 }, () => []);
   for (const t of keep) {
     const cy = t.g.y + t.g.h / 2;
@@ -602,6 +638,44 @@ function sections(items) {
     out[k].push(t.i);
   }
   return { count: seps.length, parts: out.filter(p => p.length) };
+}
+// suggested separators: horizontal gaps between the questions of a worksheet (EMU)
+const QMARK = /^(Q\b|Q(?=[\u0600-\u06FF])|[ⓐ-ⓩ]|[①-⑳]|\(?[0-9٠-٩]{1,2}\s*[\)\.\-]|مثال|تحقق|سؤال|تمرين|التمرين|أوجد|اكتب|ارسم|حل )/;
+function suggestCuts(items, pkg) {
+  const vis = items.filter(t => !t.drop && !t.hidden && t.kind !== 'sep' && t.g.h > 0 && t.g.w > 0);
+  if (vis.length < 2) return [];
+  const marked = t => /^ZAHER_QUESTION/i.test(t.name || '') || QMARK.test((t.text || '').trim());
+  const top = Math.min(...vis.map(t => t.g.y)), bottom = Math.max(...vis.map(t => t.g.y + t.g.h));
+  // a part is worth its own slide when it holds a picture/table/drawing or a real block of text
+  const worth = (y0, y1) => {
+    const inside = vis.filter(t => t.g.y + t.g.h / 2 > y0 && t.g.y + t.g.h / 2 < y1);
+    return y1 - y0 >= 60 * PT && inside.some(t => t.kind !== 'text' || t.g.h >= 40 * PT);
+  };
+  let cand;
+  const marks = vis.filter(marked).sort((a, b) => a.g.y - b.g.y);
+  if (marks.length >= 1) {
+    // cut just above every question start (only when what is above it is worth a slide)
+    cand = marks.map(m => {
+      const above = vis.filter(t => t !== m && t.g.y < m.g.y && t.g.y + t.g.h <= m.g.y + 4 * PT);
+      const end = above.length ? Math.max(...above.map(t => t.g.y + t.g.h)) : m.g.y;
+      return Math.max(Math.min(end, m.g.y) + (m.g.y - Math.min(end, m.g.y)) / 2, m.g.y - 6 * PT);
+    });
+  } else {
+    // no question marks: use the big empty bands between groups of content
+    const sorted = [...vis].sort((a, b) => a.g.y - b.g.y), bands = [];
+    for (const t of sorted) {
+      const b = bands[bands.length - 1];
+      if (b && t.g.y <= b.end + PT) b.end = Math.max(b.end, t.g.y + t.g.h); else bands.push({ y: t.g.y, end: t.g.y + t.g.h });
+    }
+    const gaps = []; for (let i = 0; i + 1 < bands.length; i++) gaps.push({ size: bands[i + 1].y - bands[i].end, mid: (bands[i].end + bands[i + 1].y) / 2 });
+    if (!gaps.length) return [];
+    const sizes = gaps.map(g => g.size).sort((a, b) => a - b), median = sizes[Math.floor(sizes.length / 2)];
+    cand = gaps.filter(g => g.size >= Math.max(14 * PT, 2.2 * median)).map(g => g.mid);
+  }
+  const out = []; let last = top;
+  for (const y of [...new Set(cand)].sort((a, b) => a - b)) if (worth(last, y) && worth(y, bottom + 1)) { out.push(y); last = y; }
+  const x0 = Math.min(...vis.map(t => t.g.x)), x1 = Math.max(...vis.map(t => t.g.x + t.g.w));
+  return out.map(y => ({ y, x: x0 - 6 * PT, w: x1 - x0 + 12 * PT }));
 }
 // a copy of the slide holding only the given items, moved up to the top margin
 function sectionXml(slideXml, pkg, ctx, ids) {
@@ -783,6 +857,7 @@ function darkXml(slideXml, pkg, ctxIn) {
   for (const t of items) if (t.drop) { t.el.parentNode.removeChild(t.el); report.removed++; }
   const keep = items.filter(t => !t.drop);
   for (const tm of kids(doc.documentElement, 'timing', 'p')) doc.documentElement.removeChild(tm);
+  for (const cn of desc(doc, 'p', 'cNvPr')) { const n = cn.getAttribute('name') || ''; if (/^UULA جزء \d+/.test(n)) cn.setAttribute('name', n.replace(/^UULA جزء \d+\s*·?\s*/, '') || 'Shape'); }
   // background
   const cSld = kid(doc.documentElement, 'cSld', 'p');
   const oldBg = kid(cSld, 'bg', 'p'); if (oldBg) cSld.removeChild(oldBg);
@@ -920,7 +995,7 @@ function layout(keep, pkg, ctx) {
   return { mode: 'two', items, bottom: Math.max(yl, yr) - GAP };
 }
 
-return { NS, PT, MARGIN, GAP, openPackage, buildPackage, parseXml, serialize, analyze, sections, sectionXml, darkXml, readTheme, mapColor, rgb };
+return { NS, PT, MARGIN, GAP, openPackage, buildPackage, parseXml, serialize, analyze, sections, suggestCuts, sectionXml, darkXml, readTheme, mapColor, rgb };
 })();
 if (typeof module !== 'undefined') module.exports = UD;
 </script>
@@ -1154,6 +1229,77 @@ function setStep2(v) { step2 = v; $('s2Done').checked = v; const s = docSettings
 $('s2Done').addEventListener('change', () => setStep2($('s2Done').checked));
 
 
+
+// ---------- step 1 tools: suggested separators, own parts ----------
+const s1Say = m => { $('s1Status').textContent = m || ''; };
+const PART_RE = /^UULA جزء (\d+)\s*·?\s*/;
+async function addBar(ctx, slide, x, y, w, name) {
+  const ln = slide.shapes.addGeometricShape(PowerPoint.GeometricShapeType.rectangle, { left: x, top: y - 1.5, width: w, height: 3 });
+  ln.name = name; ln.fill.setSolidColor('#FF0000'); ln.lineFormat.visible = false;
+  return ln;
+}
+$('suggestSep').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  busy = true; refreshLock(); s1Say('');
+  let bars = 0, slidesWith = 0, skipped = 0;
+  try {
+    const ids = await targetIds();
+    for (let k = 0; k < ids.length; k++) {
+      s1Say(T('suggesting', k + 1, ids.length));
+      const pkg = await UD.openPackage(await exportSlide(ids[k]));
+      const items = UD.analyze(UD.parseXml(pkg.files.slide), pkg, { scheme: UD.readTheme(pkg.files) });
+      // the user's own separators or parts are left alone; earlier suggestions are replaced
+      const own = items.some(t => t.part || (t.kind === 'sep' && !/تلقائي/.test(t.name)));
+      if (own) { skipped++; continue; }
+      const cuts = UD.suggestCuts(items.filter(t => t.kind !== 'sep'), pkg);
+      await run(async ctx => {
+        const slide = ctx.presentation.slides.getItem(ids[k]);
+        slide.shapes.load('items/name'); await ctx.sync();
+        slide.shapes.items.filter(x => /^UULA فاصل تلقائي/.test(x.name)).forEach(x => x.delete());
+        for (const c of cuts) await addBar(ctx, slide, c.x / PT, c.y / PT, c.w / PT, 'UULA فاصل تلقائي');
+        await ctx.sync();
+      });
+      if (cuts.length) { bars += cuts.length; slidesWith++; }
+    }
+    s1Say((bars ? T('suggested', bars, slidesWith) : T('suggestedNone')) + (skipped ? T('suggestSkip', skipped) : ''));
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+  finally { busy = false; refreshLock(); }
+});
+$('makePart').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  try {
+    await run(async ctx => {
+      const sel = ctx.presentation.getSelectedShapes(); sel.load('items/id,items/name');
+      const ss = ctx.presentation.getSelectedSlides(); ss.load('items/id'); await ctx.sync();
+      if (!sel.items.length || !ss.items.length) { s1Say(T('partNeedSel')); return; }
+      const all = ctx.presentation.slides.getItem(ss.items[0].id).shapes; all.load('items/id,items/name'); await ctx.sync();
+      const chosen = new Set(sel.items.map(x => x.id));
+      let max = 0;
+      for (const x of all.items) { const m = PART_RE.exec(x.name || ''); if (m && !chosen.has(x.id)) max = Math.max(max, +m[1]); }
+      const n = max + 1;
+      for (const x of sel.items) x.name = 'UULA جزء ' + n + ' · ' + (x.name || '').replace(PART_RE, '');
+      await ctx.sync();
+      s1Say(T('partDone', n, sel.items.length));
+    });
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+});
+$('clearParts').addEventListener('click', async () => {
+  if (!supported || busy) return;
+  try {
+    const ids = await targetIds(); let n = 0;
+    await run(async ctx => {
+      for (const id of ids) {
+        const sh = ctx.presentation.slides.getItem(id).shapes; sh.load('items/name'); await ctx.sync();
+        let hit = false;
+        for (const x of sh.items) if (PART_RE.test(x.name || '')) { x.name = x.name.replace(PART_RE, '') || 'Shape'; hit = true; }
+        if (hit) n++;
+      }
+      await ctx.sync();
+    });
+    s1Say(T('partsCleared', n));
+  } catch (e) { s1Say(T('errPrefix') + errText(e)); }
+});
+
 // ---------- title slide (UULA video template) ----------
 let tType = load('ud-ttype', 'explain'), tVar = load('ud-tvar', 1);
 function paintTitle() {
@@ -1301,7 +1447,7 @@ $('tInsert').addEventListener('click', async () => {
 // ---------- language ----------
 function setLang(l) {
   I18N.set(l); paintTitle(); paintPos(); refreshLock(); closeColors();
-  if (!busy) { say(''); tSay(''); res.innerHTML = ''; }
+  if (!busy) { say(''); tSay(''); s1Say(''); res.innerHTML = ''; }
 }
 $('langBtn').addEventListener('click', () => setLang(I18N.lang === 'ar' ? 'en' : 'ar'));
 $('langItem').addEventListener('click', () => { menu(false); setLang(I18N.lang === 'ar' ? 'en' : 'ar'); });
