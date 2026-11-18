@@ -80,6 +80,7 @@ const I18N = (() => {
     document.documentElement.lang = lang; document.documentElement.dir = D[lang].dir;
     document.querySelectorAll('[data-i18n]').forEach(e => { e.textContent = T(e.dataset.i18n); });
     document.querySelectorAll('[data-i18n-ph]').forEach(e => { e.placeholder = T(e.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-dir]').forEach(e => { e.dir = D[lang].dir; });
     document.querySelectorAll('[data-i18n-title]').forEach(e => { e.title = T(e.dataset.i18nTitle); e.setAttribute('aria-label', e.title); });
   }
   function set(l) { lang = l; try { localStorage.setItem('ud-lang', JSON.stringify(l)); } catch (e) {} apply(); }

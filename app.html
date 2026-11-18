@@ -89,7 +89,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
 .seg3{grid-template-columns:repeat(3,1fr)}.seg3 button{font-size:.8rem}
 .seg button:disabled{color:#b7bec9;cursor:not-allowed;background:var(--panel)}
 .langbtn{font:600 .8rem var(--f);color:var(--muted)}
-[dir="ltr"] h1{margin-left:0;margin-right:auto}
+header{direction:rtl}
 .credit{text-align:center;font-size:.72rem;color:var(--muted);padding:6px 0 0}
 .step{display:flex;gap:9px;align-items:flex-start;padding:4px 0}
 .step+.step{border-top:1px solid var(--line);padding-top:9px}
@@ -117,7 +117,7 @@ h1 .sub{color:#9aa3b0;font-size:13px;line-height:15px;font-weight:500}
     <button type="button" class="ib langbtn" id="langBtn" data-i18n="langBtn" data-i18n-title="langName"></button>
     <div class="appmenu">
       <button type="button" class="ib" id="menuBtn" aria-expanded="false" data-i18n-title="menu"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg></button>
-      <div class="menu" id="appMenu" hidden>
+      <div class="menu" id="appMenu" hidden data-i18n-dir>
         <button type="button" id="chkUpd" data-i18n="chkUpd"></button>
         <button type="button" id="langItem" data-i18n="langName"></button>
         <button type="button" id="aboutBtn" data-i18n="about"></button>
@@ -287,6 +287,7 @@ const I18N = (() => {
     document.documentElement.lang = lang; document.documentElement.dir = D[lang].dir;
     document.querySelectorAll('[data-i18n]').forEach(e => { e.textContent = T(e.dataset.i18n); });
     document.querySelectorAll('[data-i18n-ph]').forEach(e => { e.placeholder = T(e.dataset.i18nPh); });
+    document.querySelectorAll('[data-i18n-dir]').forEach(e => { e.dir = D[lang].dir; });
     document.querySelectorAll('[data-i18n-title]').forEach(e => { e.title = T(e.dataset.i18nTitle); e.setAttribute('aria-label', e.title); });
   }
   function set(l) { lang = l; try { localStorage.setItem('ud-lang', JSON.stringify(l)); } catch (e) {} apply(); }
