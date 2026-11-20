@@ -371,16 +371,9 @@ function fillPlaceholder(doc, idx, text, layout, scheme) {
   return spec;
 }
 const tSay = m => { $('tStatus').textContent = m || ''; };
-let tPos = load('ud-tpos', 'start'), hasSel = false;
-function paintPos() {
-  $('tPos').querySelectorAll('button').forEach(b => {
-    b.disabled = b.dataset.v !== 'start' && !hasSel;
-    b.setAttribute('aria-pressed', String(b.dataset.v === tPos));
-  });
-  $('tSelNote').hidden = hasSel;
-}
-function setPos(v) { tPos = v; save('ud-tpos', v); paintPos(); }
-$('tPos').addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.disabled) setPos(b.dataset.v); });
+let hasSel = false;
+function paintPos() {}
+$('tPos').addEventListener('click', e => { const b = e.target.closest('button'); if (b) insertTitle(b.dataset.v); });
 let selBusy = false;
 async function refreshSel() {
   if (!supported || selBusy) return;
@@ -389,13 +382,63 @@ async function refreshSel() {
     await run(async ctx => { const s = ctx.presentation.getSelectedSlides(); s.load('items/id'); await ctx.sync(); hasSel = s.items.length > 0; });
   } catch (e) { hasSel = false; }
   selBusy = false;
-  if (!hasSel && tPos !== 'start') tPos = 'start';
-  paintPos();
 }
 paintPos();
-$('tInsert').addEventListener('click', async () => {
+// ---------- inner slides (UULA video template: three styles, with or without a header) ----------
+let iVar = load('ud-ivar', 1);
+function paintInner() {
+  const box = $('iThumbs'); box.innerHTML = '';
+  for (let k = 1; k <= 3; k++) {
+    const b = document.createElement('button'); b.type = 'button'; b.title = T('style', k);
+    b.setAttribute('aria-pressed', String(k === iVar));
+    const im = document.createElement('img'); im.src = 'templates/inner-' + k + '.jpg'; im.alt = '';
+    b.appendChild(im); b.addEventListener('click', () => { iVar = k; save('ud-ivar', k); paintInner(); });
+    box.appendChild(b);
+  }
+}
+$('iPos').addEventListener('click', e => { const b = e.target.closest('button'); if (b) insertInner(b.dataset.v); });
+$('iHead').checked = !!load('ud-ihead', false);
+$('iHead').addEventListener('change', () => save('ud-ihead', $('iHead').checked));
+async function insertInner(pos) {
   if (!supported || busy) return;
-  busy = true; refreshLock(); $('tInsert').disabled = true; tSay(T('inserting'));
+  const say2 = m => { $('iStatus').textContent = m || ''; };
+  busy = true; refreshLock(); say2(T('inserting'));
+  try {
+    const r = await fetch('templates/inner-' + iVar + '-' + ($('iHead').checked ? 2 : 1) + '.pptx', { cache: 'no-cache' });
+    if (!r.ok) throw new Error(T('tplFail'));
+    const pkg = await UD.openPackage(b64of(await r.arrayBuffer()));
+    const doc = UD.parseXml(pkg.files.slide);
+    const scheme = UD.readTheme(pkg.files);
+    // empty placeholders: only the layout's place and text style are copied, the teacher writes the content
+    fillPlaceholder(doc, 11, '', pkg.layouts[0], scheme); fillPlaceholder(doc, 12, '', pkg.layouts[0], scheme);
+    const b64 = await UD.buildPackage(pkg, UD.serialize(doc));
+    await run(async ctx => {
+      const sel = ctx.presentation.getSelectedSlides(); sel.load('items/id');
+      const all = ctx.presentation.slides; all.load('items/id'); await ctx.sync();
+      const opts = { formatting: 'KeepSourceFormatting' };
+      const ids = all.items.map(x => x.id), selIds = sel.items.map(x => x.id);
+      if (pos === 'end' && ids.length) opts.targetSlideId = ids[ids.length - 1];
+      if (pos === 'after' && selIds.length) opts.targetSlideId = selIds[selIds.length - 1];
+      if (pos === 'before' && selIds.length) {
+        const first = Math.min(...selIds.map(i => ids.indexOf(i)));
+        if (first > 0) opts.targetSlideId = ids[first - 1];
+      }
+      if ((pos === 'before' || pos === 'after') && !selIds.length) throw new Error(T('selFirst'));
+      ctx.presentation.insertSlidesFromBase64(b64, opts); await ctx.sync();
+      const after = ctx.presentation.slides; after.load('items/id'); await ctx.sync();
+      const before = new Set(ids);
+      const added = after.items.find(x => !before.has(x.id));
+      if (added) { try { ctx.presentation.setSelectedSlides([added.id]); await ctx.sync(); } catch (e) {} }
+    });
+    say2(T('iInserted'));
+  } catch (e) { say2(T('insertFail') + errText(e)); }
+  finally { busy = false; refreshLock(); }
+}
+
+paintInner();
+async function insertTitle(pos) {
+  if (!supported || busy) return;
+  busy = true; refreshLock(); tSay(T('inserting'));
   try {
     const r = await fetch('templates/title-' + tType + '-' + tVar + '.pptx', { cache: 'no-cache' });
     if (!r.ok) throw new Error(T('tplFail'));
@@ -409,12 +452,12 @@ $('tInsert').addEventListener('click', async () => {
       const all = ctx.presentation.slides; all.load('items/id'); await ctx.sync();
       const opts = { formatting: 'KeepSourceFormatting' };
       const ids = all.items.map(x => x.id), selIds = sel.items.map(x => x.id);
-      if (tPos === 'after' && selIds.length) opts.targetSlideId = selIds[selIds.length - 1];
-      if (tPos === 'before' && selIds.length) {
+      if (pos === 'after' && selIds.length) opts.targetSlideId = selIds[selIds.length - 1];
+      if (pos === 'before' && selIds.length) {
         const first = Math.min(...selIds.map(i => ids.indexOf(i)));
         if (first > 0) opts.targetSlideId = ids[first - 1];
       }
-      if ((tPos === 'before' || tPos === 'after') && !selIds.length) throw new Error(T('selFirst'));
+      if ((pos === 'before' || pos === 'after') && !selIds.length) throw new Error(T('selFirst'));
       ctx.presentation.insertSlidesFromBase64(b64, opts); await ctx.sync();
       const after = ctx.presentation.slides; after.load('items/id'); await ctx.sync();
       const before = new Set(all.items.map(x => x.id));
@@ -440,12 +483,13 @@ $('tInsert').addEventListener('click', async () => {
     });
     tSay(T('inserted'));
   } catch (e) { tSay(T('insertFail') + errText(e)); }
-  finally { busy = false; $('tInsert').disabled = false; refreshLock(); }
-});
+  finally { busy = false; refreshLock(); }
+}
+
 
 // ---------- language ----------
 function setLang(l) {
-  I18N.set(l); paintTitle(); paintPos(); refreshLock(); closeColors();
+  I18N.set(l); paintTitle(); paintPos(); paintInner(); refreshLock(); closeColors();
   if (!busy) { say(''); tSay(''); s1Say(''); res.innerHTML = ''; }
 }
 $('langBtn').addEventListener('click', () => setLang(I18N.lang === 'ar' ? 'en' : 'ar'));
@@ -459,7 +503,9 @@ function setTab(t) {
   if (t === 'title') refreshSel();
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTab(b.dataset.t); });
-setTab(load('ud-tab', 'dark'));
+const MODE = window.UD_MODE || '';
+if (MODE) document.body.classList.add('m-' + MODE);
+setTab(MODE === 'cover' ? 'title' : MODE === 'dark' ? 'dark' : load('ud-tab', 'dark'));
 
 // ---------- scope ----------
 function setScope(v) { scope = v; save('ud-scope2', v); $('scope').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
@@ -542,7 +588,7 @@ $('modalX').addEventListener('click', () => { $('modal').hidden = true; });
 $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').hidden = true; });
 $('aboutBtn').addEventListener('click', () => {
   menu(false);
-  modal(T('about'), T('aboutHtml')
+  modal(T('about'), T(MODE === 'cover' ? 'aboutCover' : MODE === 'dark' ? 'aboutDark' : 'aboutHtml')
     + '<p class="foot" dir="ltr">Developed by <b>Zaher Alkablawi</b> · Version ' + VER + '<br>© 2026 UULA. All rights reserved.</p>');
 });
 

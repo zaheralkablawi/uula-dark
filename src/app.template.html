@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>UULA Dark</title>
+<title>/*TITLE*/</title>
+<script>window.UD_MODE='/*MODE*/';</script>
 <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 <style>
 :root{
@@ -117,10 +118,15 @@ header{direction:rtl}
 .dlock{font-size:.76rem;color:#9aa3b2;text-align:center}
 .darkcard .status{color:#aab2c0}.darkcard .prog{background:#2b303b}.darkcard .prog i{background:#ffe600}
 .darkcard .res a{color:#ffe600}.darkcard .res .ok{color:#6fd39a}.darkcard .res .warn{color:#f4b37a}.darkcard .res .err{color:#ff8a80}.darkcard .note{color:#9aa3b2}
+body.m-dark .tabs,body.m-cover .tabs{display:none}
+.gt2{font-size:.88rem;font-weight:600;color:var(--ink)}
+#tTitle,#tSub{text-align:center}
+#tPos button,#iPos button{color:var(--ink);font-weight:600}
+#tPos button:hover,#iPos button:hover{background:var(--accent-soft);color:var(--accent)}
 </style></head><body>
 <div class="wrap">
   <header>
-    <h1><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="#1f71de" stroke-width="2.6"/><path d="M16 3.5a12.5 12.5 0 0 1 0 25z" fill="#1f71de"/></svg><span class="bt"><span class="root">UULA</span><span class="sub">Dark</span></span></h1>
+    <h1><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12.5" fill="none" stroke="#1f71de" stroke-width="2.6"/><path d="M16 3.5a12.5 12.5 0 0 1 0 25z" fill="#1f71de"/></svg><span class="bt"><span class="root">UULA</span><span class="sub">/*SUB*/</span></span></h1>
     <button type="button" class="ib updbtn" id="updBtn" hidden data-i18n-title="update"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 10a6 6 0 1 1-1.8-4.3"/><path d="M16.2 3.2v3.5h-3.5"/></svg><span class="dot"></span></button>
     <button type="button" class="ib langbtn" id="langBtn" data-i18n="langBtn" data-i18n-title="langName"></button>
     <div class="appmenu">
@@ -194,6 +200,7 @@ header{direction:rtl}
 
   <div class="tabpage" id="pageTitle" hidden>
   <section class="panel" id="titlePanel">
+    <span class="gt2" data-i18n="coverHead"></span>
     <div class="seg seg4" id="tType">
       <button type="button" data-v="explain" aria-pressed="true" data-i18n="tExplain"></button>
       <button type="button" data-v="better" aria-pressed="false" data-i18n="tBetter"></button>
@@ -203,15 +210,25 @@ header{direction:rtl}
     <div class="thumbs" id="tThumbs"></div>
     <input type="text" class="tin" id="tTitle" data-i18n-ph="tTitlePh" dir="auto">
     <input type="text" class="tin" id="tSub" data-i18n-ph="tSubPh" dir="auto">
-    <span class="label" data-i18n="posLabel"></span>
+    <span class="label" data-i18n="insLabel"></span>
     <div class="seg seg3" id="tPos">
-      <button type="button" data-v="start" aria-pressed="true" data-i18n="posStart"></button>
-      <button type="button" data-v="before" aria-pressed="false" data-i18n="posBefore"></button>
-      <button type="button" data-v="after" aria-pressed="false" data-i18n="posAfter"></button>
+      <button type="button" data-v="start" data-i18n="posStart"></button>
+      <button type="button" data-v="before" data-i18n="posBefore"></button>
+      <button type="button" data-v="after" data-i18n="posAfter"></button>
     </div>
-    <div class="note" id="tSelNote" hidden data-i18n="tNeedSel"></div>
-    <button type="button" class="act" id="tInsert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h8M10 14h4"/></svg><span data-i18n="tInsert"></span></button>
     <div class="status" id="tStatus"></div>
+  </section>
+  <section class="panel" id="innerPanel">
+    <span class="gt2" data-i18n="innerHead"></span>
+    <div class="thumbs" id="iThumbs"></div>
+    <label class="chk"><input type="checkbox" id="iHead"> <span data-i18n="iHead"></span></label>
+    <span class="label" data-i18n="insLabel"></span>
+    <div class="seg seg3" id="iPos">
+      <button type="button" data-v="end" data-i18n="posEnd"></button>
+      <button type="button" data-v="before" data-i18n="posBefore"></button>
+      <button type="button" data-v="after" data-i18n="posAfter"></button>
+    </div>
+    <div class="status" id="iStatus"></div>
   </section>
   </div>
 
